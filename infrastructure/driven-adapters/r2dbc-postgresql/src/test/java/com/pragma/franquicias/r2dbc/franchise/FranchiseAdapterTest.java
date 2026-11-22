@@ -31,7 +31,7 @@ class FranchiseAdapterTest {
 
     @Spy
     private ResilientOperations resilient = new ResilientOperations(new ResilienceProperties(
-            Duration.ofSeconds(2), 3, Duration.ofMillis(5), 50, 100, 100, Duration.ofSeconds(30)));
+            Duration.ofSeconds(2), 3, Duration.ofMillis(5), 50, 100, 100, Duration.ofSeconds(30), 3));
 
     @InjectMocks
     private FranchiseAdapter adapter;

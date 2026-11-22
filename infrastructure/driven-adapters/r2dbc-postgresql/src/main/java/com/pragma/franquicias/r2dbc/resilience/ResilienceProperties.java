@@ -13,5 +13,6 @@ public record ResilienceProperties(
         @DefaultValue("50") int failureRateThreshold,
         @DefaultValue("10") int slidingWindowSize,
         @DefaultValue("5") int minimumNumberOfCalls,
-        @DefaultValue("10s") Duration waitInOpenState) {
+        @DefaultValue("10s") Duration waitInOpenState,
+        @DefaultValue("3") int permittedCallsInHalfOpen) {
 }
