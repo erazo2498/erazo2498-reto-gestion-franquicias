@@ -1,0 +1,28 @@
+name: Infra checks
+
+# No AWS access here: it only checks that the Terraform code is formatted and valid and that the image builds.
+# Deploying needs a GitHub Environment (deploy.yml), and a pull request cannot use one restricted to a branch.
+on:
+  pull_request:
+    branches: [main, develop]
+    paths: ['infra/**', 'deployment/**', '.github/workflows/**', '.dockerignore']
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: [infra, infra/bootstrap]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=${{ matrix.directory }} fmt -check -recursive
+      # -backend=false: validate the code without touching the remote state.
+      - run: terraform -chdir=${{ matrix.directory }} init -backend=false -input=false
+      - run: terraform -chdir=${{ matrix.directory }} validate
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deployment/Dockerfile -t reto-gestion-franquicias:check .

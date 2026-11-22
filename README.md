@@ -15,7 +15,7 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Producto con más stock por sucursal (`GET /api/v1/franchises/{franchiseId}/top-stock-products`) | Hecho |
 | Renombrar franquicia (`PATCH /api/v1/franchises/{franchiseId}`), sucursal (`PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}`) y producto (`PATCH /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
 | Resiliencia (timeout, reintentos con backoff, circuit breaker) | Hecho |
-| Imagen Docker, despliegue en AWS con Terraform | Pendiente |
+| Imagen Docker y despliegue en AWS con Terraform | `dev` desplegado; `staging` y `prod` definidos, sin desplegar |
 
 ## Stack
 
@@ -92,6 +92,9 @@ Al arrancar, Liquibase crea las tablas `franchise`, `branch` y `product` (migrac
 
 - **Swagger UI:** <http://localhost:8080/swagger-ui.html> (solo con los perfiles `local`, `dev` o `staging`).
 - **Health:** <http://localhost:8080/actuator/health>
+- **Postman:** importa `postman/franquicias.postman_collection.json` y el entorno `postman/local.postman_environment.json` (o `aws.postman_environment.json`, con la URL del
+  despliegue en `baseUrl`). La colección tiene 20 peticiones: los 9 endpoints encadenados (cada una guarda los ids que usa la siguiente), 7 errores controlados y el estado de la
+  aplicación, todas con sus comprobaciones. Ejecuta la colección completa con el *Runner*.
 - **Archivos `http/franchises.http`, `http/branches.http` y `http/products.http`:** ejemplos listos para el cliente HTTP de IntelliJ. Elige el
   entorno `local` en el selector del editor. En `branches.http` ejecuta primero la petición 1 y en `products.http` las peticiones 1 y 2: crean la
   franquicia y la sucursal que usan las demás.
@@ -253,7 +256,8 @@ dentro hacia fuera, con [Resilience4j](https://resilience4j.readme.io/) para el 
 2. **Retry con backoff exponencial:** hasta `maxAttempts` (3) intentos, empezando en `backoff` (100 ms) y duplicando. Solo se reintentan los fallos **transitorios** de
    conexión; **no** se reintentan los errores de negocio (un nombre duplicado lo seguirá siendo) ni los timeouts (la escritura pudo haberse hecho).
 3. **Circuit breaker:** si falla un `failureRateThreshold` % (50) de las últimas `slidingWindowSize` (10) llamadas, con al menos `minimumNumberOfCalls` (5), se **abre** durante
-   `waitInOpenState` (10 s) y responde de inmediato sin tocar la base de datos. Los errores de negocio no cuentan como fallos.
+   `waitInOpenState` (10 s) y responde de inmediato sin tocar la base de datos. Pasado ese tiempo queda **semiabierto**: deja pasar solo `permittedCallsInHalfOpen` (3)
+   llamadas de prueba; si salen bien se **cierra** de nuevo, y si fallan vuelve a abrirse. Los errores de negocio no cuentan como fallos.
 
 Lo que ve el cliente es `503 SERVICE_UNAVAILABLE` con el formato de error habitual, nunca un error crudo de infraestructura. Todos los valores tienen un valor por defecto y se
 pueden ajustar con las propiedades `adapters.resilience.*`.
@@ -282,6 +286,50 @@ las reglas de arquitectura y de código. El mismo comando lo ejecuta el CI en ca
 
 Dependencias hacia adentro: la infraestructura implementa los puertos que define el dominio, nunca al revés.
 
+```mermaid
+flowchart LR
+    Client(["Cliente HTTP"]) --> Router
+    subgraph EP ["entry-points / reactive-web"]
+        Router["RouterFunction"] --> Handler["Handler"]
+        Handler -. "errores" .-> Errors["ApiErrorHandler (tabla de errores)"]
+    end
+    subgraph DOM ["domain"]
+        UseCase["Caso de uso (Java puro + Reactor)"] --> Port["Puerto (gateway)"]
+        UseCase --> Model["Entidades con @Builder que se validan al construirse"]
+    end
+    subgraph INFRA ["infrastructure / driven-adapters"]
+        Adapter["Adaptador R2DBC"] --> Resilient["ResilientOperations: timeout, retry y circuit breaker"]
+    end
+    Handler --> UseCase
+    Adapter -. "implementa" .-> Port
+    Resilient --> DB[("PostgreSQL (RDS)")]
+```
+
+El recorrido de una petición, por ejemplo modificar el stock de un producto (`PATCH .../stock`):
+
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant H as ProductHandler
+    participant U as UpdateProductStockUseCase
+    participant A as ProductAdapter
+    participant DB as PostgreSQL
+    C->>H: PATCH /api/v1/branches/{b}/products/{p}/stock
+    H->>H: ids que no son UUID o stock que no es entero: 400
+    H->>U: execute(branchId, productId, stock)
+    U->>U: valida el stock en el dominio (si no: 400)
+    U->>A: updateStock(branchId, productId, stock)
+    A->>DB: UPDATE ... WHERE id AND branch_id (con timeout, retry y circuit breaker)
+    alt ninguna fila
+        A-->>U: vacío
+        U-->>H: ProductNotFoundException
+        H-->>C: 404 PRODUCT_NOT_FOUND
+    else una fila
+        A-->>H: producto actualizado
+        H-->>C: 200 con el producto
+    end
+```
+
 | Módulo | Contenido |
 |---|---|
 | `domain/model` | Entidades (Lombok `@Builder`, inmutables y que se validan al construirse) y puertos (`SaveFranchiseGateway`) |
@@ -301,6 +349,17 @@ Decisiones que conviene conocer:
 
 Para generar piezas nuevas se usan las tareas del plugin: `./gradlew gm` (modelo), `guc` (caso de uso), `gda` (adaptador de salida) y
 `gep` (entry point).
+
+## Despliegue en AWS
+
+La API corre en AWS (ECS Fargate detrás de un balanceador, imagen en ECR, PostgreSQL en RDS, credenciales en Secrets Manager) y se despliega con
+Terraform en tres ambientes: `dev`, `staging` y `prod`. Imagen:
+
+```bash
+docker build -f deployment/Dockerfile -t reto-gestion-franquicias .
+```
+
+Cómo desplegar a mano o con GitHub Actions, cómo usar la API en la nube, costos y cómo apagarlo: [`infra/README.md`](infra/README.md).
 
 ## Flujo de trabajo
 
