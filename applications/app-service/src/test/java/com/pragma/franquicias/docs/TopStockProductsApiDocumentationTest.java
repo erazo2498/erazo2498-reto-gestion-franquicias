@@ -59,8 +59,10 @@ class TopStockProductsApiDocumentationTest extends PostgresIntegrationTest {
     void describesTheItemSchema() {
         apiDocs()
                 .jsonPath("$.components.schemas.TopStockProductResponse.required.length()").isEqualTo(2)
-                .jsonPath("$.components.schemas.TopStockProductResponse.properties.product.nullable")
-                .isEqualTo(true)
+                .jsonPath("$.components.schemas.TopStockProductResponse.properties.product.type[0]")
+                .isEqualTo("object")
+                .jsonPath("$.components.schemas.TopStockProductResponse.properties.product.type[1]")
+                .isEqualTo("null")
                 .jsonPath("$.components.schemas.TopStockProductResponse.properties.branchId.format")
                 .isEqualTo("uuid");
     }
