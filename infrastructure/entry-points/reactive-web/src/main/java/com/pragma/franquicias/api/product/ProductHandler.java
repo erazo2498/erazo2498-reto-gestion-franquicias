@@ -4,6 +4,7 @@ import com.pragma.franquicias.api.error.ApiErrorHandler;
 import com.pragma.franquicias.api.error.InvalidPathIdException;
 import com.pragma.franquicias.usecase.createproduct.CreateProductUseCase;
 import com.pragma.franquicias.usecase.deleteproduct.DeleteProductUseCase;
+import com.pragma.franquicias.usecase.updateproductstock.UpdateProductStockUseCase;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ public class ProductHandler {
 
     private final CreateProductUseCase createProductUseCase;
     private final DeleteProductUseCase deleteProductUseCase;
+    private final UpdateProductStockUseCase updateProductStockUseCase;
     private final ApiErrorHandler apiErrorHandler;
 
     public Mono<ServerResponse> create(ServerRequest request) {
@@ -39,6 +41,18 @@ public class ProductHandler {
                 .zipWith(pathUuid(request, "productId", INVALID_PRODUCT_ID))
                 .flatMap(ids -> deleteProductUseCase.execute(ids.getT1(), ids.getT2()))
                 .then(Mono.defer(() -> ServerResponse.noContent().build()))
+                .as(apiErrorHandler::handle);
+    }
+
+    public Mono<ServerResponse> updateStock(ServerRequest request) {
+        return pathUuid(request, "branchId", INVALID_BRANCH_ID)
+                .zipWith(pathUuid(request, "productId", INVALID_PRODUCT_ID))
+                .flatMap(ids -> request.bodyToMono(UpdateProductStockRequest.class)
+                        .defaultIfEmpty(new UpdateProductStockRequest(null))
+                        .flatMap(body ->
+                                updateProductStockUseCase.execute(ids.getT1(), ids.getT2(), body.stock())))
+                .map(ProductResponse::from)
+                .flatMap(response -> ServerResponse.ok().bodyValue(response))
                 .as(apiErrorHandler::handle);
     }
 
