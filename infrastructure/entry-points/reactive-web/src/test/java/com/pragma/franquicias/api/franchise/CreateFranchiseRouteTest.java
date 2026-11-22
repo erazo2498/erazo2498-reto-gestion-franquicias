@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import com.pragma.franquicias.api.config.JacksonConfig;
 import com.pragma.franquicias.api.error.ApiErrorHandler;
+import com.pragma.franquicias.model.common.ServiceUnavailableException;
 import com.pragma.franquicias.model.franchise.Franchise;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
 import com.pragma.franquicias.model.franchise.exceptions.InvalidFranchiseNameException;
@@ -128,6 +129,20 @@ class CreateFranchiseRouteTest {
                 .jsonPath("$.code").isEqualTo("UNSUPPORTED_MEDIA_TYPE");
 
         verifyNoInteractions(createFranchiseUseCase);
+    }
+
+    @Test
+    void answersWith503WhenThePersistenceIsUnavailable() {
+        when(createFranchiseUseCase.execute("Burger Co"))
+                .thenReturn(Mono.error(new ServiceUnavailableException()));
+
+        postJson("{\"name\":\"Burger Co\"}")
+                .exchange()
+                .expectStatus().isEqualTo(503)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("SERVICE_UNAVAILABLE")
+                .jsonPath("$.message").isEqualTo("The service is temporarily unavailable, try again later")
+                .jsonPath("$.timestamp").isNotEmpty();
     }
 
     @Test
