@@ -291,3 +291,45 @@ GET {{baseUrl}}/api/v1/franchises/{{franchiseForProducts.response.body.id}}/top-
         client.assert(Array.isArray(response.body), "se esperaba una lista");
     });
 %}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 7. Renombrar un producto: PATCH /api/v1/branches/{branchId}/products/{productId}
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name productToRename
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Nuggets {{$timestamp}}",
+  "stock": 12
+}
+
+###
+
+### Camino feliz: 200 con el producto renombrado (el stock no cambia). Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "Nuggets de pollo {{$timestamp}}"
+}
+
+> {%
+    client.test("200 OK con el nombre nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.stock === 12, "el stock no debe cambiar: " + response.body.stock);
+    });
+%}
+
+###
+
+### Renombrar a un nombre que ya existe en la sucursal, sin distinguir mayúsculas (409 DUPLICATE_NAME)
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "HAMBURGUESA"
+}

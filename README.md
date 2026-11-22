@@ -13,7 +13,7 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Eliminar producto (`DELETE /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
 | Modificar stock (`PATCH /api/v1/branches/{branchId}/products/{productId}/stock`) | Hecho |
 | Producto con más stock por sucursal (`GET /api/v1/franchises/{franchiseId}/top-stock-products`) | Hecho |
-| Renombrar franquicia, sucursal y producto | Pendiente |
+| Renombrar franquicia (`PATCH /api/v1/franchises/{franchiseId}`), sucursal (`PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}`) y producto (`PATCH /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
 | Resiliencia (timeout, reintentos, circuit breaker) | Pendiente |
 | Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
@@ -208,6 +208,25 @@ Sin cuerpo. Responde `200` con **una fila por sucursal** de la franquicia, orden
 - Una sucursal **sin productos** aparece con `"product": null`; un producto con stock `0` también cuenta si es el único.
 - Una franquicia sin sucursales responde `200` con `[]`; una franquicia que no existe, `404 FRANCHISE_NOT_FOUND`; un id que no es UUID, `400`.
 - Se resuelve con **una sola consulta SQL** (`LEFT JOIN LATERAL`); la existencia de la franquicia se comprueba aparte.
+
+### Renombrar: `PATCH` de franquicia, sucursal y producto
+
+Los tres reciben el mismo cuerpo y responden `200` con el recurso actualizado:
+
+```json
+{ "name": "Pizza Co" }
+```
+
+| Recurso | Ruta | Unicidad del nombre |
+|---|---|---|
+| Franquicia | `PATCH /api/v1/franchises/{franchiseId}` | global, sin distinguir mayúsculas |
+| Sucursal | `PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}` | dentro de su franquicia |
+| Producto | `PATCH /api/v1/branches/{branchId}/products/{productId}` | dentro de su sucursal |
+
+- El nombre se recorta y debe tener **de 1 a 120 caracteres** y ser texto; las reglas son las mismas que al crear.
+- El renombrado está **acotado al padre**: una sucursal solo se renombra a través de su franquicia y un producto a través de su sucursal; si no coincide, `404` y nada cambia.
+- Cambiar solo las mayúsculas del propio nombre (`Burger Co` a `BURGER CO`) está permitido; usar el nombre de **otro** recurso del mismo padre da `409`.
+- El stock del producto no cambia al renombrarlo. Enviar dos veces el mismo nombre deja el mismo estado.
 
 ### Errores
 

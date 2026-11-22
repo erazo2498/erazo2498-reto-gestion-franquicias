@@ -103,3 +103,33 @@ Content-Type: application/json
         client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
     });
 %}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 4. Renombrar una sucursal: PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name branchToRename
+POST {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches
+Content-Type: application/json
+
+{
+  "name": "Oeste {{$timestamp}}"
+}
+
+###
+
+### Camino feliz: 200 con la sucursal renombrada. Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches/{{branchToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "Oeste renovada {{$timestamp}}"
+}
+
+> {%
+    client.test("200 OK con el nombre nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+    });
+%}

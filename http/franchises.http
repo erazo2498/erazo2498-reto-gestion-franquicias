@@ -204,3 +204,43 @@ GET {{baseUrl}}/api/v1/franchises/00000000-0000-0000-0000-000000000000/top-stock
 
 ### El id de la franquicia no es un UUID (400 INVALID_DATA)
 GET {{baseUrl}}/api/v1/franchises/abc/top-stock-products
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### Renombrar una franquicia: PATCH /api/v1/franchises/{franchiseId}
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name franchiseToRename
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "Para renombrar {{$timestamp}}"
+}
+
+###
+
+### Camino feliz: 200 con la franquicia renombrada. Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/franchises/{{franchiseToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "Renombrada {{$timestamp}}"
+}
+
+> {%
+    client.test("200 OK con el nombre nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+    });
+%}
+
+###
+
+### La franquicia no existe (404 FRANCHISE_NOT_FOUND)
+PATCH {{baseUrl}}/api/v1/franchises/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+
+{
+  "name": "Nada"
+}

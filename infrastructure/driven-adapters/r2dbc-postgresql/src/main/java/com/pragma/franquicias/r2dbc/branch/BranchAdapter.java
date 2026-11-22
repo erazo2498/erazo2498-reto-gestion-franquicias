@@ -1,20 +1,26 @@
 package com.pragma.franquicias.r2dbc.branch;
 
+import static org.springframework.data.relational.core.query.Criteria.where;
+
 import com.pragma.franquicias.model.branch.Branch;
 import com.pragma.franquicias.model.branch.exceptions.DuplicateBranchNameException;
+import com.pragma.franquicias.model.branch.gateways.RenameBranchGateway;
 import com.pragma.franquicias.model.branch.gateways.SaveBranchGateway;
 import com.pragma.franquicias.model.franchise.exceptions.FranchiseNotFoundException;
 import io.r2dbc.spi.R2dbcException;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.query.Query;
+import org.springframework.data.relational.core.query.Update;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 @Repository
 @RequiredArgsConstructor
-public class BranchAdapter implements SaveBranchGateway {
+public class BranchAdapter implements SaveBranchGateway, RenameBranchGateway {
 
     private static final String FOREIGN_KEY_VIOLATION = "23503";
 
@@ -31,6 +37,17 @@ public class BranchAdapter implements SaveBranchGateway {
                 .onErrorMap(
                         this::isForeignKeyViolation,
                         error -> new FranchiseNotFoundException(branch.getFranchiseId()));
+    }
+
+    // Renames the branch scoped to its franchise. Completes empty when no row matched.
+    @Override
+    public Mono<Branch> rename(UUID franchiseId, UUID branchId, String name) {
+        Query scope = Query.query(where("id").is(branchId).and(where("franchiseId").is(franchiseId)));
+        return template.update(scope, Update.update("name", name), BranchData.class)
+                .filter(updatedRows -> updatedRows > 0)
+                .flatMap(updatedRows -> template.selectOne(scope, BranchData.class))
+                .map(this::toEntity)
+                .onErrorMap(DuplicateKeyException.class, error -> new DuplicateBranchNameException(name));
     }
 
     // Spring reports every integrity violation with the same class; the SQLSTATE tells a missing franchise apart.
