@@ -1,0 +1,9 @@
+dependencies {
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'com.tngtech.archunit:archunit:1.4.1'
+}
+
+// The rules tests read the sources of every module from the repository root.
+tasks.withType(Test).configureEach {
+    workingDir = rootProject.projectDir
+}
