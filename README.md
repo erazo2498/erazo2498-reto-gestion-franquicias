@@ -10,7 +10,8 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Crear franquicia (`POST /api/v1/franchises`) | Hecho |
 | Agregar sucursal (`POST /api/v1/franchises/{franchiseId}/branches`) | Hecho |
 | Agregar producto (`POST /api/v1/branches/{branchId}/products`) | Hecho |
-| Eliminar producto, modificar stock, producto con más stock por sucursal, renombrar | Pendiente |
+| Eliminar producto (`DELETE /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
+| Modificar stock, producto con más stock por sucursal, renombrar | Pendiente |
 | Resiliencia (timeout, reintentos, circuit breaker) | Pendiente |
 | Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
@@ -159,13 +160,23 @@ Respuesta `201`:
 { "id": "5d7e2a91-3c4b-4a6f-9b18-0e2f7c6d4a53", "branchId": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "name": "Hamburguesa", "stock": 10 }
 ```
 
+### `DELETE /api/v1/branches/{branchId}/products/{productId}`: eliminar un producto de una sucursal
+
+Sin cuerpo en la petición. Respuesta `204` sin cuerpo.
+
+- El borrado es **idempotente**: responde `204` tanto si el producto existía como si no, y repetirlo deja el mismo estado y la misma respuesta.
+  Por eso este endpoint **no tiene `404`**.
+- Solo se borra si el producto pertenece a la sucursal de la ruta: un producto de **otra** sucursal no se toca (y también se responde `204`).
+- Si `branchId` o `productId` no son un UUID responde `400`.
+- El nombre del producto borrado queda libre: se puede crear otro con el mismo nombre en esa sucursal.
+
 ### Errores
 
 Todos los errores usan el mismo formato: `{ "code": "...", "message": "...", "timestamp": "..." }`.
 
 | HTTP | `code` | Cuándo |
 |---|---|---|
-| `400` | `INVALID_DATA` | Nombre ausente, nulo, en blanco o de más de 120 caracteres; stock ausente, negativo, decimal o que no es un entero; JSON mal formado; nombre que no es texto; sin cuerpo; `franchiseId` o `branchId` que no son un UUID |
+| `400` | `INVALID_DATA` | Nombre ausente, nulo, en blanco o de más de 120 caracteres; stock ausente, negativo, decimal o que no es un entero; JSON mal formado; nombre que no es texto; sin cuerpo; `franchiseId`, `branchId` o `productId` que no son un UUID |
 | `404` | `FRANCHISE_NOT_FOUND` | La franquicia a la que se quiere agregar la sucursal no existe |
 | `404` | `BRANCH_NOT_FOUND` | La sucursal a la que se quiere agregar el producto no existe |
 | `409` | `DUPLICATE_NAME` | Ya existe una franquicia con ese nombre, una sucursal con ese nombre en esa franquicia o un producto con ese nombre en esa sucursal (ignorando mayúsculas) |
