@@ -3,6 +3,7 @@ package com.pragma.franquicias.api.product;
 import com.pragma.franquicias.api.error.ApiErrorHandler;
 import com.pragma.franquicias.api.error.InvalidPathIdException;
 import com.pragma.franquicias.usecase.createproduct.CreateProductUseCase;
+import com.pragma.franquicias.usecase.deleteproduct.DeleteProductUseCase;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,11 +16,15 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class ProductHandler {
 
+    private static final String INVALID_BRANCH_ID = "Branch id must be a valid UUID";
+    private static final String INVALID_PRODUCT_ID = "Product id must be a valid UUID";
+
     private final CreateProductUseCase createProductUseCase;
+    private final DeleteProductUseCase deleteProductUseCase;
     private final ApiErrorHandler apiErrorHandler;
 
     public Mono<ServerResponse> create(ServerRequest request) {
-        return branchId(request)
+        return pathUuid(request, "branchId", INVALID_BRANCH_ID)
                 .flatMap(branchId -> request.bodyToMono(CreateProductRequest.class)
                         .defaultIfEmpty(new CreateProductRequest(null, null))
                         .flatMap(body -> createProductUseCase.execute(branchId, body.name(), body.stock())))
@@ -28,10 +33,18 @@ public class ProductHandler {
                 .as(apiErrorHandler::handle);
     }
 
-    private Mono<UUID> branchId(ServerRequest request) {
-        return Mono.fromSupplier(() -> UUID.fromString(request.pathVariable("branchId")))
-                .onErrorMap(
-                        IllegalArgumentException.class,
-                        error -> new InvalidPathIdException("Branch id must be a valid UUID"));
+    // Deleting is idempotent: 204 whether the product existed or not. Clients that want to check query it.
+    public Mono<ServerResponse> delete(ServerRequest request) {
+        return pathUuid(request, "branchId", INVALID_BRANCH_ID)
+                .zipWith(pathUuid(request, "productId", INVALID_PRODUCT_ID))
+                .flatMap(ids -> deleteProductUseCase.execute(ids.getT1(), ids.getT2()))
+                .then(Mono.defer(() -> ServerResponse.noContent().build()))
+                .as(apiErrorHandler::handle);
+    }
+
+    // Reads a path variable as a UUID; anything else is a 400, not a 404.
+    private Mono<UUID> pathUuid(ServerRequest request, String variable, String message) {
+        return Mono.fromSupplier(() -> UUID.fromString(request.pathVariable(variable)))
+                .onErrorMap(IllegalArgumentException.class, error -> new InvalidPathIdException(message));
     }
 }

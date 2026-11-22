@@ -150,3 +150,59 @@ Content-Type: application/json
 {
   "name": "Papas"
 }
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 4. Eliminar producto: DELETE /api/v1/branches/{branchId}/products/{productId}
+### El borrado es idempotente: responde 204 exista o no el producto. Hoy no hay endpoint de lectura; para comprobar que se
+### eliminó se puede volver a crear un producto con el mismo nombre (201: el nombre quedó libre) o mirar la base de datos.
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name productToDelete
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Cerveza {{$timestamp}}",
+  "stock": 24
+}
+
+###
+
+### Camino feliz: 204 sin cuerpo. Ejecuta antes la petición anterior.
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToDelete.response.body.id}}
+
+> {%
+    client.test("204 No Content", function () {
+        client.assert(response.status === 204, "se esperaba 204 y llegó " + response.status);
+    });
+%}
+
+###
+
+### Repetirlo da lo mismo (204): el producto ya no existe y eso no es un error.
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToDelete.response.body.id}}
+
+> {%
+    client.test("204 otra vez (idempotente)", function () {
+        client.assert(response.status === 204, "se esperaba 204 y llegó " + response.status);
+    });
+%}
+
+###
+
+### Un producto que nunca existió también da 204, y no se borra nada.
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/00000000-0000-0000-0000-000000000000
+
+###
+
+### El id del producto no es un UUID (400 INVALID_DATA)
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/abc
+
+> {%
+    client.test("400 INVALID_DATA", function () {
+        client.assert(response.status === 400, "se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
+    });
+%}

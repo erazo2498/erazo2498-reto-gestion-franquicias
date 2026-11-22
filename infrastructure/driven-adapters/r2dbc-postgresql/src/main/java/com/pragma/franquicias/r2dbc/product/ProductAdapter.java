@@ -1,20 +1,25 @@
 package com.pragma.franquicias.r2dbc.product;
 
+import static org.springframework.data.relational.core.query.Criteria.where;
+
 import com.pragma.franquicias.model.branch.exceptions.BranchNotFoundException;
 import com.pragma.franquicias.model.product.Product;
 import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameException;
+import com.pragma.franquicias.model.product.gateways.DeleteProductGateway;
 import com.pragma.franquicias.model.product.gateways.SaveProductGateway;
 import io.r2dbc.spi.R2dbcException;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.query.Query;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 @Repository
 @RequiredArgsConstructor
-public class ProductAdapter implements SaveProductGateway {
+public class ProductAdapter implements SaveProductGateway, DeleteProductGateway {
 
     private static final String FOREIGN_KEY_VIOLATION = "23503";
 
@@ -31,6 +36,15 @@ public class ProductAdapter implements SaveProductGateway {
                 .onErrorMap(
                         this::isForeignKeyViolation,
                         error -> new BranchNotFoundException(product.getBranchId()));
+    }
+
+    // A single statement scoped to the branch: a product of another branch is never touched, and deleting a product
+    // that is already gone is not an error, so the number of deleted rows is ignored.
+    @Override
+    public Mono<Void> delete(UUID branchId, UUID productId) {
+        return template.delete(
+                        Query.query(where("id").is(productId).and(where("branchId").is(branchId))), ProductData.class)
+                .then();
     }
 
     // Spring reports every integrity violation with the same class; the SQLSTATE tells a missing branch apart.

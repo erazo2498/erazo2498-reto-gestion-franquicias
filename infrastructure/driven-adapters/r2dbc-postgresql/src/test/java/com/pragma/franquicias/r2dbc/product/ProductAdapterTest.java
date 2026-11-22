@@ -1,7 +1,10 @@
 package com.pragma.franquicias.r2dbc.product;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.pragma.franquicias.model.branch.exceptions.BranchNotFoundException;
@@ -11,6 +14,7 @@ import io.r2dbc.spi.R2dbcDataIntegrityViolationException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,6 +22,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.query.Query;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -80,6 +85,38 @@ class ProductAdapterTest {
 
         StepVerifier.create(adapter.save(product))
                 .expectError(DataIntegrityViolationException.class)
+                .verify();
+    }
+
+    @Test
+    void deletesTheProductScopedToItsBranchAndCompletesEmpty() {
+        UUID branchId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        when(template.delete(any(Query.class), eq(ProductData.class))).thenReturn(Mono.just(1L));
+
+        StepVerifier.create(adapter.delete(branchId, productId)).verifyComplete();
+
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        verify(template).delete(query.capture(), eq(ProductData.class));
+        String criteria = query.getValue().getCriteria().orElseThrow().toString();
+        assertTrue(criteria.contains(productId.toString()), criteria);
+        assertTrue(criteria.contains(branchId.toString()), criteria);
+    }
+
+    @Test
+    void completesEmptyWhenThereWasNothingToDelete() {
+        when(template.delete(any(Query.class), eq(ProductData.class))).thenReturn(Mono.just(0L));
+
+        StepVerifier.create(adapter.delete(UUID.randomUUID(), UUID.randomUUID())).verifyComplete();
+    }
+
+    @Test
+    void letsDatabaseErrorsPassUntouchedWhenDeleting() {
+        when(template.delete(any(Query.class), eq(ProductData.class)))
+                .thenReturn(Mono.error(new DataAccessResourceFailureException("connection lost")));
+
+        StepVerifier.create(adapter.delete(UUID.randomUUID(), UUID.randomUUID()))
+                .expectError(DataAccessResourceFailureException.class)
                 .verify();
     }
 
