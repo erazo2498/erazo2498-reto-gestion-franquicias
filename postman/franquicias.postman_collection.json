@@ -1,0 +1,483 @@
+{
+  "info": {
+    "name": "API de Gestión de Franquicias",
+    "description": "Los 9 endpoints encadenados (cada petición guarda en variables los ids que usa la siguiente), los errores controlados y el estado de la aplicación. Elige el entorno 'local' o 'aws' y ejecuta la carpeta con el Runner, o las peticiones una a una de arriba abajo. Cada petición lleva sus comprobaciones.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Flujo principal (los 9 endpoints)",
+      "item": [
+        {
+          "name": "1. Crear franquicia",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": [ "pm.collectionVariables.set('franchiseName', 'Burger Co ' + Date.now());" ] }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created con id y nombre', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.id).to.be.a('string');",
+                  "    pm.expect(body.name).to.eql(pm.collectionVariables.get('franchiseName'));",
+                  "    pm.collectionVariables.set('franchiseId', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{franchiseName}}\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "2. Agregar sucursal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created con la franquicia a la que pertenece', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.franchiseId).to.eql(pm.collectionVariables.get('franchiseId'));",
+                  "    pm.collectionVariables.set('branchId', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises/{{franchiseId}}/branches", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises", "{{franchiseId}}", "branches" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Centro\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "3. Agregar producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created con la sucursal y el stock', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.branchId).to.eql(pm.collectionVariables.get('branchId'));",
+                  "    pm.expect(body.stock).to.eql(10);",
+                  "    pm.collectionVariables.set('productId', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Hamburguesa\",\n  \"stock\": 10\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "3b. Agregar un segundo producto (para que el máximo tenga con qué compararse)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [ "pm.test('201 Created', function () { pm.response.to.have.status(201); });" ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Gaseosa\",\n  \"stock\": 5\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "4. Modificar el stock de un producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK con el stock nuevo', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().stock).to.eql(40);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products/{{productId}}/stock", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products", "{{productId}}", "stock" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"stock\": 40\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "5. Producto con más stock por sucursal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK: una fila por sucursal con su producto de mayor stock', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const rows = pm.response.json();",
+                  "    pm.expect(rows).to.be.an('array').with.lengthOf(1);",
+                  "    pm.expect(rows[0].branchName).to.eql('Centro');",
+                  "    pm.expect(rows[0].product.name).to.eql('Hamburguesa');",
+                  "    pm.expect(rows[0].product.stock).to.eql(40);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises/{{franchiseId}}/top-stock-products", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises", "{{franchiseId}}", "top-stock-products" ] }
+          }
+        },
+        {
+          "name": "6. Renombrar un producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK con el nombre nuevo y el mismo stock', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.name).to.eql('Hamburguesa doble');",
+                  "    pm.expect(body.stock).to.eql(40);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products/{{productId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products", "{{productId}}" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Hamburguesa doble\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "7. Renombrar una sucursal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK con el nombre nuevo', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().name).to.eql('Centro renovado');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises/{{franchiseId}}/branches/{{branchId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises", "{{franchiseId}}", "branches", "{{branchId}}" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Centro renovado\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "8. Renombrar una franquicia",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": [ "pm.collectionVariables.set('franchiseName', 'Renombrada ' + Date.now());" ] }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK con el nombre nuevo', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().name).to.eql(pm.collectionVariables.get('franchiseName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises/{{franchiseId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises", "{{franchiseId}}" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{franchiseName}}\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "9. Eliminar un producto de una sucursal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content, sin cuerpo', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "    pm.expect(pm.response.text()).to.eql('');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products/{{productId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products", "{{productId}}" ] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Errores controlados (todos con el formato {code, message, timestamp})",
+      "item": [
+        {
+          "name": "409: nombre de franquicia duplicado (sin distinguir mayúsculas)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 DUPLICATE_NAME', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().code).to.eql('DUPLICATE_NAME');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{franchiseName}}\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "404: agregar una sucursal a una franquicia que no existe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 FRANCHISE_NOT_FOUND', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().code).to.eql('FRANCHISE_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises/00000000-0000-0000-0000-000000000000/branches", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises", "00000000-0000-0000-0000-000000000000", "branches" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Nada\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "404: modificar el stock de un producto que no está en la sucursal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 PRODUCT_NOT_FOUND', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().code).to.eql('PRODUCT_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products/00000000-0000-0000-0000-000000000000/stock", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products", "00000000-0000-0000-0000-000000000000", "stock" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"stock\": 5\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "400: stock decimal (no se corta a un entero)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 INVALID_DATA', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_DATA');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Papas\",\n  \"stock\": 1.7\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "400: stock negativo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 INVALID_DATA', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_DATA');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/products", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "{{branchId}}", "products" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Papas\",\n  \"stock\": -1\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "400: el id de la sucursal no es un UUID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 INVALID_DATA, no 404', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_DATA');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/branches/abc/products", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "branches", "abc", "products" ] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Papas\",\n  \"stock\": 1\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "415: el cuerpo no es JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('415 UNSUPPORTED_MEDIA_TYPE', function () {",
+                  "    pm.response.to.have.status(415);",
+                  "    pm.expect(pm.response.json().code).to.eql('UNSUPPORTED_MEDIA_TYPE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "text/plain" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/franchises", "host": [ "{{baseUrl}}" ], "path": [ "api", "v1", "franchises" ] },
+            "body": { "mode": "raw", "raw": "Burger Co", "options": { "raw": { "language": "text" } } }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Estado y documentación",
+      "item": [
+        {
+          "name": "Health (es lo único que expone el actuator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [ "pm.test('200 OK', function () { pm.response.to.have.status(200); });" ] }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/actuator/health", "host": [ "{{baseUrl}}" ], "path": [ "actuator", "health" ] }
+          }
+        },
+        {
+          "name": "Prometheus NO debe estar expuesto",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [ "pm.test('404: las métricas internas no son públicas', function () { pm.response.to.have.status(404); });" ] }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/actuator/prometheus", "host": [ "{{baseUrl}}" ], "path": [ "actuator", "prometheus" ] }
+          }
+        },
+        {
+          "name": "Documento OpenAPI (Swagger UI: {{baseUrl}}/swagger-ui.html)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK con los 9 endpoints documentados', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const operations = JSON.stringify(pm.response.json().paths);",
+                  "    ['createFranchise', 'createBranch', 'createProduct', 'deleteProduct', 'updateProductStock',",
+                  "     'getTopStockProducts', 'renameFranchise', 'renameBranch', 'renameProduct']",
+                  "        .forEach(function (id) { pm.expect(operations).to.include(id); });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/v3/api-docs", "host": [ "{{baseUrl}}" ], "path": [ "v3", "api-docs" ] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" }
+  ]
+}

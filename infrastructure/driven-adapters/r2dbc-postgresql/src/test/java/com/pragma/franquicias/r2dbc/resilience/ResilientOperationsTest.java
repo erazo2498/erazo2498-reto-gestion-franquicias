@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.pragma.franquicias.model.common.ServiceUnavailableException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -14,10 +15,11 @@ import reactor.test.StepVerifier;
 
 class ResilientOperationsTest {
 
-    // timeout, maxAttempts, backoff, failureRateThreshold, slidingWindowSize, minimumNumberOfCalls, waitInOpenState
+    // timeout, maxAttempts, backoff, failureRateThreshold, slidingWindowSize, minimumNumberOfCalls, waitInOpenState,
+    // permittedCallsInHalfOpen
     private static ResilientOperations operations(Duration timeout, int maxAttempts, int window, int minimumCalls) {
         return new ResilientOperations(new ResilienceProperties(
-                timeout, maxAttempts, Duration.ofMillis(5), 50, window, minimumCalls, Duration.ofSeconds(30)));
+                timeout, maxAttempts, Duration.ofMillis(5), 50, window, minimumCalls, Duration.ofSeconds(30), 3));
     }
 
     private static ResilientOperations defaults() {
@@ -109,6 +111,41 @@ class ResilientOperationsTest {
 
         assertEquals(2, callsBeforeTheCircuitOpened);
         assertEquals(callsBeforeTheCircuitOpened, calls.get());
+    }
+
+    // After the open period the circuit is half open: it lets only a few probe calls through to see whether the
+    // database is back, and rejects the rest. Here a single probe is allowed and it is still running when a second
+    // call arrives, so that second call is rejected.
+    @Test
+    void inHalfOpenOnlyTheConfiguredNumberOfProbeCallsIsLetThrough() {
+        ResilientOperations operations = new ResilientOperations(new ResilienceProperties(
+                Duration.ofSeconds(2), 1, Duration.ofMillis(5), 50, 2, 2, Duration.ofMillis(200), 1));
+        Mono<String> down = Mono.error(new DataAccessResourceFailureException("connection lost"));
+        StepVerifier.create(operations.protect(down)).expectError(ServiceUnavailableException.class).verify();
+        StepVerifier.create(operations.protect(down)).expectError(ServiceUnavailableException.class).verify();
+        StepVerifier.create(Mono.delay(Duration.ofMillis(400))).expectNextCount(1).verifyComplete();
+
+        Mono<String> probe = operations.protect(Mono.delay(Duration.ofMillis(400)).map(tick -> "probe"));
+        Mono<String> rejected =
+                operations.protect(Mono.just("second")).delaySubscription(Duration.ofMillis(100));
+
+        StepVerifier.create(Flux.merge(probe.onErrorReturn("probe-failed"), rejected.onErrorReturn("rejected"))
+                        .collectList())
+                .assertNext(results -> assertEquals(List.of("rejected", "probe"), results))
+                .verifyComplete();
+    }
+
+    @Test
+    void theCircuitClosesAgainWhenTheProbeSucceeds() {
+        ResilientOperations operations = new ResilientOperations(new ResilienceProperties(
+                Duration.ofSeconds(2), 1, Duration.ofMillis(5), 50, 2, 2, Duration.ofMillis(200), 1));
+        Mono<String> down = Mono.error(new DataAccessResourceFailureException("connection lost"));
+        StepVerifier.create(operations.protect(down)).expectError(ServiceUnavailableException.class).verify();
+        StepVerifier.create(operations.protect(down)).expectError(ServiceUnavailableException.class).verify();
+        StepVerifier.create(Mono.delay(Duration.ofMillis(400))).expectNextCount(1).verifyComplete();
+
+        StepVerifier.create(operations.protect(Mono.just("back"))).expectNext("back").verifyComplete();
+        StepVerifier.create(operations.protect(Mono.just("and again"))).expectNext("and again").verifyComplete();
     }
 
     @Test

@@ -92,6 +92,9 @@ Al arrancar, Liquibase crea las tablas `franchise`, `branch` y `product` (migrac
 
 - **Swagger UI:** <http://localhost:8080/swagger-ui.html> (solo con los perfiles `local`, `dev` o `staging`).
 - **Health:** <http://localhost:8080/actuator/health>
+- **Postman:** importa `postman/franquicias.postman_collection.json` y el entorno `postman/local.postman_environment.json` (o `aws.postman_environment.json`, con la URL del
+  despliegue en `baseUrl`). La colección tiene 20 peticiones: los 9 endpoints encadenados (cada una guarda los ids que usa la siguiente), 7 errores controlados y el estado de la
+  aplicación, todas con sus comprobaciones. Ejecuta la colección completa con el *Runner*.
 - **Archivos `http/franchises.http`, `http/branches.http` y `http/products.http`:** ejemplos listos para el cliente HTTP de IntelliJ. Elige el
   entorno `local` en el selector del editor. En `branches.http` ejecuta primero la petición 1 y en `products.http` las peticiones 1 y 2: crean la
   franquicia y la sucursal que usan las demás.
@@ -253,7 +256,8 @@ dentro hacia fuera, con [Resilience4j](https://resilience4j.readme.io/) para el 
 2. **Retry con backoff exponencial:** hasta `maxAttempts` (3) intentos, empezando en `backoff` (100 ms) y duplicando. Solo se reintentan los fallos **transitorios** de
    conexión; **no** se reintentan los errores de negocio (un nombre duplicado lo seguirá siendo) ni los timeouts (la escritura pudo haberse hecho).
 3. **Circuit breaker:** si falla un `failureRateThreshold` % (50) de las últimas `slidingWindowSize` (10) llamadas, con al menos `minimumNumberOfCalls` (5), se **abre** durante
-   `waitInOpenState` (10 s) y responde de inmediato sin tocar la base de datos. Los errores de negocio no cuentan como fallos.
+   `waitInOpenState` (10 s) y responde de inmediato sin tocar la base de datos. Pasado ese tiempo queda **semiabierto**: deja pasar solo `permittedCallsInHalfOpen` (3)
+   llamadas de prueba; si salen bien se **cierra** de nuevo, y si fallan vuelve a abrirse. Los errores de negocio no cuentan como fallos.
 
 Lo que ve el cliente es `503 SERVICE_UNAVAILABLE` con el formato de error habitual, nunca un error crudo de infraestructura. Todos los valores tienen un valor por defecto y se
 pueden ajustar con las propiedades `adapters.resilience.*`.
@@ -281,6 +285,50 @@ las reglas de arquitectura y de código. El mismo comando lo ejecuta el CI en ca
 ## Arquitectura
 
 Dependencias hacia adentro: la infraestructura implementa los puertos que define el dominio, nunca al revés.
+
+```mermaid
+flowchart LR
+    Client(["Cliente HTTP"]) --> Router
+    subgraph EP ["entry-points / reactive-web"]
+        Router["RouterFunction"] --> Handler["Handler"]
+        Handler -. "errores" .-> Errors["ApiErrorHandler (tabla de errores)"]
+    end
+    subgraph DOM ["domain"]
+        UseCase["Caso de uso (Java puro + Reactor)"] --> Port["Puerto (gateway)"]
+        UseCase --> Model["Entidades con @Builder que se validan al construirse"]
+    end
+    subgraph INFRA ["infrastructure / driven-adapters"]
+        Adapter["Adaptador R2DBC"] --> Resilient["ResilientOperations: timeout, retry y circuit breaker"]
+    end
+    Handler --> UseCase
+    Adapter -. "implementa" .-> Port
+    Resilient --> DB[("PostgreSQL (RDS)")]
+```
+
+El recorrido de una petición, por ejemplo modificar el stock de un producto (`PATCH .../stock`):
+
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant H as ProductHandler
+    participant U as UpdateProductStockUseCase
+    participant A as ProductAdapter
+    participant DB as PostgreSQL
+    C->>H: PATCH /api/v1/branches/{b}/products/{p}/stock
+    H->>H: ids que no son UUID o stock que no es entero: 400
+    H->>U: execute(branchId, productId, stock)
+    U->>U: valida el stock en el dominio (si no: 400)
+    U->>A: updateStock(branchId, productId, stock)
+    A->>DB: UPDATE ... WHERE id AND branch_id (con timeout, retry y circuit breaker)
+    alt ninguna fila
+        A-->>U: vacío
+        U-->>H: ProductNotFoundException
+        H-->>C: 404 PRODUCT_NOT_FOUND
+    else una fila
+        A-->>H: producto actualizado
+        H-->>C: 200 con el producto
+    end
+```
 
 | Módulo | Contenido |
 |---|---|

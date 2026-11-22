@@ -21,7 +21,8 @@ import reactor.core.publisher.Mono;
 //   2. Retry with exponential backoff: only for transient connection failures, never for business errors (a duplicate
 //      name will be a duplicate name again) and never after a timeout (the write may have happened).
 //   3. Circuit breaker: after repeated infrastructure failures it opens and fails fast, so a database that is down
-//      is not hammered. Business errors do not count as failures.
+//      is not hammered. After the open period it is half open: only a few probe calls go through to see whether the
+//      database is back, and the circuit closes again if they succeed. Business errors do not count as failures.
 // What the client finally sees is a ServiceUnavailableException (503) instead of a raw infrastructure error.
 public class ResilientOperations {
 
@@ -45,6 +46,7 @@ public class ResilientOperations {
                         .slidingWindowSize(properties.slidingWindowSize())
                         .minimumNumberOfCalls(properties.minimumNumberOfCalls())
                         .waitDurationInOpenState(properties.waitInOpenState())
+                        .permittedNumberOfCallsInHalfOpenState(properties.permittedCallsInHalfOpen())
                         .recordException(error -> isTransient(error) || error instanceof TimeoutException)
                         .build());
     }
