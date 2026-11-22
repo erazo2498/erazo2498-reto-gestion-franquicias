@@ -3,6 +3,7 @@ package com.pragma.franquicias.api.franchise;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.pragma.franquicias.api.config.JacksonConfig;
 import com.pragma.franquicias.api.error.ApiErrorHandler;
 import com.pragma.franquicias.model.franchise.Franchise;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
@@ -19,7 +20,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
 @WebFluxTest
-@ContextConfiguration(classes = {FranchiseRouter.class, FranchiseHandler.class, ApiErrorHandler.class})
+@ContextConfiguration(
+        classes = {FranchiseRouter.class, FranchiseHandler.class, ApiErrorHandler.class, JacksonConfig.class})
 class CreateFranchiseRouteTest {
 
     private static final String PATH = "/api/v1/franchises";
