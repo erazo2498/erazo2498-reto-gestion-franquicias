@@ -9,7 +9,8 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 |---|---|
 | Crear franquicia (`POST /api/v1/franchises`) | Hecho |
 | Agregar sucursal (`POST /api/v1/franchises/{franchiseId}/branches`) | Hecho |
-| Productos, stock, producto con más stock por sucursal, renombrar | Pendiente |
+| Agregar producto (`POST /api/v1/branches/{branchId}/products`) | Hecho |
+| Eliminar producto, modificar stock, producto con más stock por sucursal, renombrar | Pendiente |
 | Resiliencia (timeout, reintentos, circuit breaker) | Pendiente |
 | Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
@@ -81,14 +82,15 @@ set -a; source .env; set +a
 ./gradlew :app-service:bootRun --args='--spring.profiles.active=local'
 ```
 
-Al arrancar, Liquibase crea las tablas `franchise` y `branch` (migraciones `001` y `002`) y el log termina con `Netty started on port 8080`.
+Al arrancar, Liquibase crea las tablas `franchise`, `branch` y `product` (migraciones `001`, `002` y `003`) y el log termina con `Netty started on port 8080`.
 
 ### 3. Probar
 
 - **Swagger UI:** <http://localhost:8080/swagger-ui.html> (solo con los perfiles `local`, `dev` o `staging`).
 - **Health:** <http://localhost:8080/actuator/health>
-- **Archivos `http/franchises.http` y `http/branches.http`:** ejemplos listos para el cliente HTTP de IntelliJ. Elige el entorno `local` en el
-  selector del editor. En `branches.http` ejecuta primero la petición 1: crea la franquicia que usan las demás.
+- **Archivos `http/franchises.http`, `http/branches.http` y `http/products.http`:** ejemplos listos para el cliente HTTP de IntelliJ. Elige el
+  entorno `local` en el selector del editor. En `branches.http` ejecuta primero la petición 1 y en `products.http` las peticiones 1 y 2: crean la
+  franquicia y la sucursal que usan las demás.
 - **`curl`:**
 
 ```bash
@@ -136,15 +138,37 @@ Respuesta `201`:
 { "id": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "franchiseId": "3f2b8c1e-7a4d-4e59-9c0a-1d6e5b8f2a47", "name": "Centro" }
 ```
 
+### `POST /api/v1/branches/{branchId}/products`: agregar un producto a una sucursal
+
+Petición (`branchId` es el id de una sucursal existente):
+
+```json
+{ "name": "Hamburguesa", "stock": 10 }
+```
+
+- El nombre sigue las mismas reglas que los anteriores: se recorta, de **1 a 120 caracteres** y debe ser texto.
+- Es **único dentro de su sucursal, sin distinguir mayúsculas**: dos sucursales distintas pueden tener cada una un producto `Hamburguesa`.
+- El `stock` es **obligatorio** y debe ser un **número entero mayor o igual que 0**. Se rechazan (con `400`) un valor ausente o `null`, los
+  negativos, los decimales (`1.7`), el texto (`"5"`) y los números mayores que el máximo de un entero; nada se convierte ni se corta en silencio.
+- Si `branchId` no es un UUID responde `400`; si es un UUID que no existe, `404`.
+- Una sucursal con productos no se puede borrar (la base de datos lo impide); hoy no hay endpoint para borrar sucursales.
+
+Respuesta `201`:
+
+```json
+{ "id": "5d7e2a91-3c4b-4a6f-9b18-0e2f7c6d4a53", "branchId": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "name": "Hamburguesa", "stock": 10 }
+```
+
 ### Errores
 
 Todos los errores usan el mismo formato: `{ "code": "...", "message": "...", "timestamp": "..." }`.
 
 | HTTP | `code` | Cuándo |
 |---|---|---|
-| `400` | `INVALID_DATA` | Nombre ausente, nulo, en blanco o de más de 120 caracteres; JSON mal formado; nombre que no es texto; sin cuerpo; `franchiseId` que no es un UUID |
+| `400` | `INVALID_DATA` | Nombre ausente, nulo, en blanco o de más de 120 caracteres; stock ausente, negativo, decimal o que no es un entero; JSON mal formado; nombre que no es texto; sin cuerpo; `franchiseId` o `branchId` que no son un UUID |
 | `404` | `FRANCHISE_NOT_FOUND` | La franquicia a la que se quiere agregar la sucursal no existe |
-| `409` | `DUPLICATE_NAME` | Ya existe una franquicia con ese nombre, o una sucursal con ese nombre en esa franquicia (ignorando mayúsculas) |
+| `404` | `BRANCH_NOT_FOUND` | La sucursal a la que se quiere agregar el producto no existe |
+| `409` | `DUPLICATE_NAME` | Ya existe una franquicia con ese nombre, una sucursal con ese nombre en esa franquicia o un producto con ese nombre en esa sucursal (ignorando mayúsculas) |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` | El `Content-Type` no es `application/json` |
 | `500` | `INTERNAL_ERROR` | Error inesperado; el detalle solo se escribe en el log del servidor |
 

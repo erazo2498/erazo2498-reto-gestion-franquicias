@@ -36,7 +36,9 @@ class BranchPersistenceIntegrationTest extends PostgresIntegrationTest {
     @BeforeEach
     @AfterEach
     void cleanTables() {
-        // Branches first: they reference franchises. Cleaning also after each test keeps other test classes unaffected.
+        // Children first: products reference branches and branches reference franchises. Cleaning also after each test
+        // keeps other test classes unaffected.
+        StepVerifier.create(databaseClient.sql("DELETE FROM product").then()).verifyComplete();
         StepVerifier.create(databaseClient.sql("DELETE FROM branch").then()).verifyComplete();
         StepVerifier.create(databaseClient.sql("DELETE FROM franchise").then()).verifyComplete();
     }

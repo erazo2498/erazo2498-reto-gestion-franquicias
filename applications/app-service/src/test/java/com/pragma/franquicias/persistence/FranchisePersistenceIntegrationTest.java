@@ -28,6 +28,7 @@ class FranchisePersistenceIntegrationTest extends PostgresIntegrationTest {
 
     @BeforeEach
     void cleanTable() {
+        StepVerifier.create(databaseClient.sql("DELETE FROM product").then()).verifyComplete();
         StepVerifier.create(databaseClient.sql("DELETE FROM branch").then()).verifyComplete();
         StepVerifier.create(databaseClient.sql("DELETE FROM franchise").then()).verifyComplete();
     }
