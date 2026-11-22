@@ -12,7 +12,8 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Agregar producto (`POST /api/v1/branches/{branchId}/products`) | Hecho |
 | Eliminar producto (`DELETE /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
 | Modificar stock (`PATCH /api/v1/branches/{branchId}/products/{productId}/stock`) | Hecho |
-| Producto con más stock por sucursal, renombrar | Pendiente |
+| Producto con más stock por sucursal (`GET /api/v1/franchises/{franchiseId}/top-stock-products`) | Hecho |
+| Renombrar franquicia, sucursal y producto | Pendiente |
 | Resiliencia (timeout, reintentos, circuit breaker) | Pendiente |
 | Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
@@ -191,6 +192,22 @@ Respuesta `200`:
 ```json
 { "id": "5d7e2a91-3c4b-4a6f-9b18-0e2f7c6d4a53", "branchId": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "name": "Hamburguesa", "stock": 25 }
 ```
+
+### `GET /api/v1/franchises/{franchiseId}/top-stock-products`: producto con más stock por sucursal
+
+Sin cuerpo. Responde `200` con **una fila por sucursal** de la franquicia, ordenadas por nombre de sucursal (sin distinguir mayúsculas):
+
+```json
+[
+  { "branchId": "9a1c4e72-...", "branchName": "Centro", "product": { "id": "5d7e2a91-...", "name": "Hamburguesa", "stock": 40 } },
+  { "branchId": "c1f6a3d8-...", "branchName": "Norte",  "product": null }
+]
+```
+
+- **Empates:** si varios productos de una sucursal tienen el mismo stock máximo, se devuelve uno solo: el de nombre menor (sin distinguir mayúsculas) y, si aún empatan, el de id menor. Así la respuesta es siempre la misma.
+- Una sucursal **sin productos** aparece con `"product": null`; un producto con stock `0` también cuenta si es el único.
+- Una franquicia sin sucursales responde `200` con `[]`; una franquicia que no existe, `404 FRANCHISE_NOT_FOUND`; un id que no es UUID, `400`.
+- Se resuelve con **una sola consulta SQL** (`LEFT JOIN LATERAL`); la existencia de la franquicia se comprueba aparte.
 
 ### Errores
 
