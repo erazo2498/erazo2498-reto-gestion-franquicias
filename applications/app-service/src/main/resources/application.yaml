@@ -25,3 +25,18 @@ management:
     health:
       probes:
         enabled: true
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+---
+spring:
+  config:
+    activate:
+      on-profile: local,dev,staging
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
