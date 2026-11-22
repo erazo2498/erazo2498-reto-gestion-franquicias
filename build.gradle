@@ -24,3 +24,51 @@ subprojects {
     ext['jackson-bom.version'] = "3.3.0"
 }
 
+// Code coverage of the whole project. It is measured across modules because a class is often exercised by the tests
+// of another module (e.g. the OpenAPI classes of reactive-web are covered by the integration tests of app-service).
+evaluationDependsOnChildren()
+apply plugin: 'jacoco'
+
+def moduleProjects = subprojects.findAll { it.plugins.hasPlugin('java') }
+def moduleTests = moduleProjects.collect { it.tasks.named('test') }
+def moduleExecutionData = moduleProjects.collect { it.layout.buildDirectory.file('jacoco/test.exec') }
+def moduleClasses = moduleProjects.collectMany { module ->
+    module.sourceSets.main.output.classesDirs.collect { dir ->
+        fileTree(dir) { exclude '**/MainApplication.class' }
+    }
+}
+
+tasks.register('jacocoAggregatedReport', JacocoReport) {
+    group = 'verification'
+    description = 'Coverage report of all modules, measured with the tests of all modules.'
+    dependsOn moduleTests
+    executionData.from(moduleExecutionData)
+    classDirectories.from(moduleClasses)
+    sourceDirectories.from(moduleProjects.collect { it.sourceSets.main.java.srcDirs })
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.register('jacocoCoverageCheck', JacocoCoverageVerification) {
+    group = 'verification'
+    description = 'Fails the build when the line coverage of the whole project is under the minimum.'
+    dependsOn moduleTests
+    executionData.from(moduleExecutionData)
+    classDirectories.from(moduleClasses)
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = (findProperty('coverageMinimum') ?: '0.70').toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'jacocoAggregatedReport', 'jacocoCoverageCheck'
+}
+
