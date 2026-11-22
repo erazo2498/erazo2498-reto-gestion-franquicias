@@ -60,6 +60,7 @@ La aplicación necesita estas variables de entorno. No tienen valores por defect
 | `DB_NAME` | `franquicias` |
 | `DB_USERNAME` | `franquicias` |
 | `DB_PASSWORD` | la que pusiste en `.env` |
+| `DB_SSL` | opcional, `false` por defecto (local). `true` si la base de datos exige TLS, como RDS PostgreSQL 16: cifra la conexión, pero no verifica el certificado del servidor (limitación declarada) |
 
 Además, activa el perfil `local` para que Swagger esté disponible.
 
