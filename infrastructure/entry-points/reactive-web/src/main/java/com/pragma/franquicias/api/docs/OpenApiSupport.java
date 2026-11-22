@@ -2,6 +2,7 @@ package com.pragma.franquicias.api.docs;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.examples.Example;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.DateTimeSchema;
@@ -14,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 // Pieces shared by the OpenAPI descriptions of every endpoint, so each endpoint only describes what is its own.
 final class OpenApiSupport {
@@ -30,6 +32,15 @@ final class OpenApiSupport {
         components.addSchemas("ErrorResponse", errorResponseSchema());
         openApi.setComponents(components);
         return components;
+    }
+
+    // Adds an operation to a path WITHOUT replacing the ones other endpoints already described on the same path
+    // (for example DELETE and PATCH of a product share /branches/{branchId}/products/{productId}).
+    static void mergePath(OpenAPI openApi, String path, UnaryOperator<PathItem> addOperation) {
+        PathItem existing = Optional.ofNullable(openApi.getPaths())
+                .map(paths -> paths.get(path))
+                .orElseGet(PathItem::new);
+        openApi.path(path, addOperation.apply(existing));
     }
 
     private static Schema<?> errorResponseSchema() {

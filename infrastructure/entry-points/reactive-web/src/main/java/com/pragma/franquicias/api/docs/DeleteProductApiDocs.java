@@ -2,10 +2,10 @@ package com.pragma.franquicias.api.docs;
 
 import static com.pragma.franquicias.api.docs.OpenApiSupport.componentsWithErrorSchema;
 import static com.pragma.franquicias.api.docs.OpenApiSupport.error;
+import static com.pragma.franquicias.api.docs.OpenApiSupport.mergePath;
 import static com.pragma.franquicias.api.docs.OpenApiSupport.response;
 
 import io.swagger.v3.oas.models.Operation;
-import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.UUIDSchema;
 import io.swagger.v3.oas.models.parameters.PathParameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
@@ -26,7 +26,7 @@ public class DeleteProductApiDocs {
     public OpenApiCustomizer deleteProductDocs() {
         return openApi -> {
             componentsWithErrorSchema(openApi);
-            openApi.path(PATH, new PathItem().delete(deleteProductOperation()));
+            mergePath(openApi, PATH, item -> item.delete(deleteProductOperation()));
         };
     }
 
