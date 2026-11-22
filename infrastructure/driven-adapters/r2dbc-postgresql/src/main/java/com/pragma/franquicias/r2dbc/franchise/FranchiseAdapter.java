@@ -1,17 +1,22 @@
 package com.pragma.franquicias.r2dbc.franchise;
 
+import static org.springframework.data.relational.core.query.Criteria.where;
+
 import com.pragma.franquicias.model.franchise.Franchise;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
+import com.pragma.franquicias.model.franchise.gateways.ExistsFranchiseGateway;
 import com.pragma.franquicias.model.franchise.gateways.SaveFranchiseGateway;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.query.Query;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 @Repository
 @RequiredArgsConstructor
-public class FranchiseAdapter implements SaveFranchiseGateway {
+public class FranchiseAdapter implements SaveFranchiseGateway, ExistsFranchiseGateway {
 
     private final R2dbcEntityTemplate template;
 
@@ -23,6 +28,11 @@ public class FranchiseAdapter implements SaveFranchiseGateway {
                 .onErrorMap(
                         DuplicateKeyException.class,
                         error -> new DuplicateFranchiseNameException(franchise.getName()));
+    }
+
+    @Override
+    public Mono<Boolean> existsById(UUID franchiseId) {
+        return template.exists(Query.query(where("id").is(franchiseId)), FranchiseData.class);
     }
 
     private FranchiseData toData(Franchise franchise) {
