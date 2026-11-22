@@ -5,11 +5,13 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
 import static org.springframework.http.HttpStatus.UNSUPPORTED_MEDIA_TYPE;
 
 import com.pragma.franquicias.model.branch.exceptions.BranchNotFoundException;
 import com.pragma.franquicias.model.branch.exceptions.DuplicateBranchNameException;
 import com.pragma.franquicias.model.branch.exceptions.InvalidBranchNameException;
+import com.pragma.franquicias.model.common.ServiceUnavailableException;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
 import com.pragma.franquicias.model.franchise.exceptions.FranchiseNotFoundException;
 import com.pragma.franquicias.model.franchise.exceptions.InvalidFranchiseNameException;
@@ -58,6 +60,7 @@ public class ApiErrorHandler {
             entry(InvalidPathIdException.class, ApiError.of(BAD_REQUEST, "INVALID_DATA")),
             entry(ServerWebInputException.class, ApiError.fixed(BAD_REQUEST, "INVALID_DATA", "Malformed request body")),
             entry(FranchiseNotFoundException.class, ApiError.of(NOT_FOUND, "FRANCHISE_NOT_FOUND")),
+            entry(ServiceUnavailableException.class, ApiError.of(SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE")),
             entry(BranchNotFoundException.class, ApiError.of(NOT_FOUND, "BRANCH_NOT_FOUND")),
             entry(ProductNotFoundException.class, ApiError.of(NOT_FOUND, "PRODUCT_NOT_FOUND")),
             entry(DuplicateFranchiseNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
