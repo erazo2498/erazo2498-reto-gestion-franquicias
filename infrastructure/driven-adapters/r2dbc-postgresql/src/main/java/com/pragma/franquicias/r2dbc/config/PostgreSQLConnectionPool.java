@@ -4,6 +4,7 @@ import io.r2dbc.pool.ConnectionPool;
 import io.r2dbc.pool.ConnectionPoolConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
+import io.r2dbc.postgresql.client.SSLMode;
 import java.time.Duration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ public class PostgreSQLConnectionPool {
                 .schema(properties.schema())
                 .username(properties.username())
                 .password(properties.password())
+                .sslMode(sslMode(properties))
                 .build();
 
         ConnectionPoolConfiguration poolConfiguration = ConnectionPoolConfiguration.builder()
@@ -36,5 +38,12 @@ public class PostgreSQLConnectionPool {
                 .build();
 
         return new ConnectionPool(poolConfiguration);
+    }
+
+    // RDS PostgreSQL 16 only accepts encrypted connections; the local container does not use TLS. REQUIRE encrypts the
+    // connection but does not verify the server certificate (a declared limitation: it protects against eavesdropping,
+    // not against an impostor server).
+    static SSLMode sslMode(PostgresqlConnectionProperties properties) {
+        return properties.ssl() ? SSLMode.REQUIRE : SSLMode.DISABLE;
     }
 }

@@ -6,7 +6,9 @@ spring:
   devtools:
     add-properties: false
   liquibase:
-    url: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    # Liquibase uses JDBC, which needs its own TLS parameters. With DB_SSL=true the connection is encrypted without
+    # verifying the server certificate (same as the R2DBC connection); without DB_SSL it stays unencrypted (local).
+    url: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?ssl=${DB_SSL:false}&sslfactory=org.postgresql.ssl.NonValidatingFactory"
     user: "${DB_USERNAME}"
     password: "${DB_PASSWORD}"
 adapters:
@@ -16,6 +18,7 @@ adapters:
     database: "${DB_NAME}"
     username: "${DB_USERNAME}"
     password: "${DB_PASSWORD}"
+    ssl: "${DB_SSL:false}"
 management:
   endpoints:
     web:
