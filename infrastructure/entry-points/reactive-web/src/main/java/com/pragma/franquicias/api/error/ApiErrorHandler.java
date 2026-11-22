@@ -7,11 +7,15 @@ import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 import static org.springframework.http.HttpStatus.UNSUPPORTED_MEDIA_TYPE;
 
+import com.pragma.franquicias.model.branch.exceptions.BranchNotFoundException;
 import com.pragma.franquicias.model.branch.exceptions.DuplicateBranchNameException;
 import com.pragma.franquicias.model.branch.exceptions.InvalidBranchNameException;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
 import com.pragma.franquicias.model.franchise.exceptions.FranchiseNotFoundException;
 import com.pragma.franquicias.model.franchise.exceptions.InvalidFranchiseNameException;
+import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameException;
+import com.pragma.franquicias.model.product.exceptions.InvalidProductNameException;
+import com.pragma.franquicias.model.product.exceptions.InvalidProductStockException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -48,11 +52,15 @@ public class ApiErrorHandler {
     private static final Map<Class<? extends Throwable>, ApiError> ERRORS = Map.ofEntries(
             entry(InvalidFranchiseNameException.class, ApiError.of(BAD_REQUEST, "INVALID_DATA")),
             entry(InvalidBranchNameException.class, ApiError.of(BAD_REQUEST, "INVALID_DATA")),
+            entry(InvalidProductNameException.class, ApiError.of(BAD_REQUEST, "INVALID_DATA")),
+            entry(InvalidProductStockException.class, ApiError.of(BAD_REQUEST, "INVALID_DATA")),
             entry(InvalidPathIdException.class, ApiError.of(BAD_REQUEST, "INVALID_DATA")),
             entry(ServerWebInputException.class, ApiError.fixed(BAD_REQUEST, "INVALID_DATA", "Malformed request body")),
             entry(FranchiseNotFoundException.class, ApiError.of(NOT_FOUND, "FRANCHISE_NOT_FOUND")),
+            entry(BranchNotFoundException.class, ApiError.of(NOT_FOUND, "BRANCH_NOT_FOUND")),
             entry(DuplicateFranchiseNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
             entry(DuplicateBranchNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
+            entry(DuplicateProductNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
             entry(
                     UnsupportedMediaTypeStatusException.class,
                     ApiError.fixed(
