@@ -14,7 +14,7 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Modificar stock (`PATCH /api/v1/branches/{branchId}/products/{productId}/stock`) | Hecho |
 | Producto con más stock por sucursal (`GET /api/v1/franchises/{franchiseId}/top-stock-products`) | Hecho |
 | Renombrar franquicia (`PATCH /api/v1/franchises/{franchiseId}`), sucursal (`PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}`) y producto (`PATCH /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
-| Resiliencia (timeout, reintentos, circuit breaker) | Pendiente |
+| Resiliencia (timeout, reintentos con backoff, circuit breaker) | Hecho |
 | Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
 ## Stack
@@ -240,7 +240,25 @@ Todos los errores usan el mismo formato: `{ "code": "...", "message": "...", "ti
 | `404` | `PRODUCT_NOT_FOUND` | Al modificar el stock: el producto no está en esa sucursal (no existe, es de otra sucursal o la sucursal no existe) |
 | `409` | `DUPLICATE_NAME` | Ya existe una franquicia con ese nombre, una sucursal con ese nombre en esa franquicia o un producto con ese nombre en esa sucursal (ignorando mayúsculas) |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` | El `Content-Type` no es `application/json` |
+| `503` | `SERVICE_UNAVAILABLE` | La base de datos no responde a tiempo, está caída o el circuit breaker está abierto (ver Resiliencia) |
 | `500` | `INTERNAL_ERROR` | Error inesperado; el detalle solo se escribe en el log del servidor |
+
+## Resiliencia
+
+Toda llamada a la base de datos pasa por `ResilientOperations` (`infrastructure/driven-adapters/r2dbc-postgresql/.../resilience`), que aplica tres patrones de
+dentro hacia fuera, con [Resilience4j](https://resilience4j.readme.io/) para el circuit breaker y el retry:
+
+1. **Timeout:** ningún intento espera más de `adapters.resilience.timeout` (3 s por defecto).
+2. **Retry con backoff exponencial:** hasta `maxAttempts` (3) intentos, empezando en `backoff` (100 ms) y duplicando. Solo se reintentan los fallos **transitorios** de
+   conexión; **no** se reintentan los errores de negocio (un nombre duplicado lo seguirá siendo) ni los timeouts (la escritura pudo haberse hecho).
+3. **Circuit breaker:** si falla un `failureRateThreshold` % (50) de las últimas `slidingWindowSize` (10) llamadas, con al menos `minimumNumberOfCalls` (5), se **abre** durante
+   `waitInOpenState` (10 s) y responde de inmediato sin tocar la base de datos. Los errores de negocio no cuentan como fallos.
+
+Lo que ve el cliente es `503 SERVICE_UNAVAILABLE` con el formato de error habitual, nunca un error crudo de infraestructura. Todos los valores tienen un valor por defecto y se
+pueden ajustar con las propiedades `adapters.resilience.*`.
+
+**Backpressure:** WebFlux y Reactor lo gestionan de forma nativa. El suscriptor pide elementos (`request(n)`) y el productor no emite más de los pedidos; en este proyecto la consulta
+de lista (`top-stock-products`) se consume como `Flux` desde R2DBC, que entrega las filas bajo demanda, y solo se materializa en una lista al final, en el handler, para responder el JSON.
 
 ## Pruebas y cobertura
 
