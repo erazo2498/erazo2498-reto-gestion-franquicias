@@ -1,10 +1,10 @@
 package com.pragma.franquicias.model.franchise.exceptions;
 
+import com.pragma.franquicias.model.franchise.FranchiseValidator;
+
 public class InvalidFranchiseNameException extends RuntimeException {
 
-    public static final int MAX_LENGTH = 120;
-
     public InvalidFranchiseNameException() {
-        super("Franchise name must be between 1 and " + MAX_LENGTH + " characters");
+        super("Franchise name must be between 1 and " + FranchiseValidator.MAX_NAME_LENGTH + " characters");
     }
 }
