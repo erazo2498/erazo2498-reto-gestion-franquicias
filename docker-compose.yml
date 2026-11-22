@@ -1,0 +1,22 @@
+# Local PostgreSQL for development. Host port 5433 avoids clashing with another Postgres on 5432.
+# Credentials come from .env (copy .env.example); the .env file is never committed.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: franquicias-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-franquicias}
+      POSTGRES_USER: ${DB_USERNAME:-franquicias}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-franquicias} -d ${DB_NAME:-franquicias}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
