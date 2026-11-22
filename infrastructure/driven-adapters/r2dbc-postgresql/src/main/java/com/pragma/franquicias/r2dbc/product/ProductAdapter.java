@@ -7,6 +7,7 @@ import com.pragma.franquicias.model.product.Product;
 import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameException;
 import com.pragma.franquicias.model.product.gateways.DeleteProductGateway;
 import com.pragma.franquicias.model.product.gateways.SaveProductGateway;
+import com.pragma.franquicias.model.product.gateways.UpdateProductStockGateway;
 import io.r2dbc.spi.R2dbcException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -14,12 +15,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.query.Query;
+import org.springframework.data.relational.core.query.Update;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 @Repository
 @RequiredArgsConstructor
-public class ProductAdapter implements SaveProductGateway, DeleteProductGateway {
+public class ProductAdapter implements SaveProductGateway, DeleteProductGateway, UpdateProductStockGateway {
 
     private static final String FOREIGN_KEY_VIOLATION = "23503";
 
@@ -45,6 +47,17 @@ public class ProductAdapter implements SaveProductGateway, DeleteProductGateway 
         return template.delete(
                         Query.query(where("id").is(productId).and(where("branchId").is(branchId))), ProductData.class)
                 .then();
+    }
+
+    // The update is scoped to the branch, like the delete. It completes empty when no row matched, so the use case
+    // can tell the client the product was not found; otherwise the updated product is read back.
+    @Override
+    public Mono<Product> updateStock(UUID branchId, UUID productId, int stock) {
+        Query scope = Query.query(where("id").is(productId).and(where("branchId").is(branchId)));
+        return template.update(scope, Update.update("stock", stock), ProductData.class)
+                .filter(updatedRows -> updatedRows > 0)
+                .flatMap(updatedRows -> template.selectOne(scope, ProductData.class))
+                .map(this::toEntity);
     }
 
     // Spring reports every integrity violation with the same class; the SQLSTATE tells a missing branch apart.

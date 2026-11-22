@@ -11,7 +11,8 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Agregar sucursal (`POST /api/v1/franchises/{franchiseId}/branches`) | Hecho |
 | Agregar producto (`POST /api/v1/branches/{branchId}/products`) | Hecho |
 | Eliminar producto (`DELETE /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
-| Modificar stock, producto con más stock por sucursal, renombrar | Pendiente |
+| Modificar stock (`PATCH /api/v1/branches/{branchId}/products/{productId}/stock`) | Hecho |
+| Producto con más stock por sucursal, renombrar | Pendiente |
 | Resiliencia (timeout, reintentos, circuit breaker) | Pendiente |
 | Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
@@ -170,6 +171,27 @@ Sin cuerpo en la petición. Respuesta `204` sin cuerpo.
 - Si `branchId` o `productId` no son un UUID responde `400`.
 - El nombre del producto borrado queda libre: se puede crear otro con el mismo nombre en esa sucursal.
 
+### `PATCH /api/v1/branches/{branchId}/products/{productId}/stock`: modificar el stock de un producto
+
+Petición:
+
+```json
+{ "stock": 25 }
+```
+
+- **Fija** el stock al valor enviado (no suma ni resta) y responde `200` con el producto actualizado.
+- Las reglas del stock son las mismas que al crear: **obligatorio, entero y mayor o igual que 0**; se rechazan (con `400`) un valor ausente o `null`, los
+  negativos, los decimales, el texto y los números mayores que el máximo de un entero.
+- Solo actualiza si el producto pertenece a la sucursal de la ruta; si no (no existe, es de otra sucursal o la sucursal no existe) responde `404`
+  `PRODUCT_NOT_FOUND`, y el producto de otra sucursal no cambia.
+- Enviar dos veces el mismo valor deja el mismo estado. Con peticiones simultáneas, gana la última escritura.
+
+Respuesta `200`:
+
+```json
+{ "id": "5d7e2a91-3c4b-4a6f-9b18-0e2f7c6d4a53", "branchId": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "name": "Hamburguesa", "stock": 25 }
+```
+
 ### Errores
 
 Todos los errores usan el mismo formato: `{ "code": "...", "message": "...", "timestamp": "..." }`.
@@ -179,6 +201,7 @@ Todos los errores usan el mismo formato: `{ "code": "...", "message": "...", "ti
 | `400` | `INVALID_DATA` | Nombre ausente, nulo, en blanco o de más de 120 caracteres; stock ausente, negativo, decimal o que no es un entero; JSON mal formado; nombre que no es texto; sin cuerpo; `franchiseId`, `branchId` o `productId` que no son un UUID |
 | `404` | `FRANCHISE_NOT_FOUND` | La franquicia a la que se quiere agregar la sucursal no existe |
 | `404` | `BRANCH_NOT_FOUND` | La sucursal a la que se quiere agregar el producto no existe |
+| `404` | `PRODUCT_NOT_FOUND` | Al modificar el stock: el producto no está en esa sucursal (no existe, es de otra sucursal o la sucursal no existe) |
 | `409` | `DUPLICATE_NAME` | Ya existe una franquicia con ese nombre, una sucursal con ese nombre en esa franquicia o un producto con ese nombre en esa sucursal (ignorando mayúsculas) |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` | El `Content-Type` no es `application/json` |
 | `500` | `INTERNAL_ERROR` | Error inesperado; el detalle solo se escribe en el log del servidor |

@@ -8,6 +8,7 @@ import com.pragma.franquicias.api.config.JacksonConfig;
 import com.pragma.franquicias.api.error.ApiErrorHandler;
 import com.pragma.franquicias.usecase.createproduct.CreateProductUseCase;
 import com.pragma.franquicias.usecase.deleteproduct.DeleteProductUseCase;
+import com.pragma.franquicias.usecase.updateproductstock.UpdateProductStockUseCase;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,9 +33,12 @@ class DeleteProductRouteTest {
     @MockitoBean
     private DeleteProductUseCase deleteProductUseCase;
 
-    // The router also needs the create use case to build the handler.
+    // The handler also needs the other use cases to be built.
     @MockitoBean
     private CreateProductUseCase createProductUseCase;
+
+    @MockitoBean
+    private UpdateProductStockUseCase updateProductStockUseCase;
 
     private WebTestClient.ResponseSpec delete(Object branchId, Object productId) {
         return webTestClient.delete().uri(PATH, branchId, productId).exchange();

@@ -206,3 +206,73 @@ DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/produc
         client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
     });
 %}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 5. Modificar el stock: PATCH /api/v1/branches/{branchId}/products/{productId}/stock
+### Fija el valor nuevo (no suma ni resta) y responde 200 con el producto actualizado.
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name productForStock
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Pizza {{$timestamp}}",
+  "stock": 10
+}
+
+###
+
+### Camino feliz: 200 con el producto y el stock nuevo. Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productForStock.response.body.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": 25
+}
+
+> {%
+    client.test("200 OK con el stock nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.stock === 25, "stock inesperado: " + response.body.stock);
+    });
+%}
+
+###
+
+### El producto no existe en esa sucursal (404 PRODUCT_NOT_FOUND)
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/00000000-0000-0000-0000-000000000000/stock
+Content-Type: application/json
+
+{
+  "stock": 25
+}
+
+> {%
+    client.test("404 PRODUCT_NOT_FOUND", function () {
+        client.assert(response.status === 404, "se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.code === "PRODUCT_NOT_FOUND", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Stock negativo (400 INVALID_DATA)
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productForStock.response.body.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": -3
+}
+
+###
+
+### Stock decimal (400 INVALID_DATA): no se corta a 2, se rechaza
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productForStock.response.body.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": 2.5
+}

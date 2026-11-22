@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.query.Query;
+import org.springframework.data.relational.core.query.Update;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -116,6 +118,55 @@ class ProductAdapterTest {
                 .thenReturn(Mono.error(new DataAccessResourceFailureException("connection lost")));
 
         StepVerifier.create(adapter.delete(UUID.randomUUID(), UUID.randomUUID()))
+                .expectError(DataAccessResourceFailureException.class)
+                .verify();
+    }
+
+    @Test
+    void updatesTheStockScopedToItsBranchAndReturnsTheUpdatedProduct() {
+        UUID branchId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        when(template.update(any(Query.class), any(Update.class), eq(ProductData.class))).thenReturn(Mono.just(1L));
+        when(template.selectOne(any(Query.class), eq(ProductData.class)))
+                .thenReturn(Mono.just(new ProductData(productId, branchId, "Hamburguesa", 25)));
+
+        StepVerifier.create(adapter.updateStock(branchId, productId, 25))
+                .assertNext(updated -> {
+                    assertEquals(productId, updated.getId());
+                    assertEquals(25, updated.getStock());
+                })
+                .verifyComplete();
+
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        verify(template).update(query.capture(), any(Update.class), eq(ProductData.class));
+        String criteria = query.getValue().getCriteria().orElseThrow().toString();
+        assertTrue(criteria.contains(productId.toString()), criteria);
+        assertTrue(criteria.contains(branchId.toString()), criteria);
+    }
+
+    @Test
+    void completesEmptyWithoutReadingAnythingWhenNoRowWasUpdated() {
+        when(template.update(any(Query.class), any(Update.class), eq(ProductData.class))).thenReturn(Mono.just(0L));
+
+        StepVerifier.create(adapter.updateStock(UUID.randomUUID(), UUID.randomUUID(), 25)).verifyComplete();
+
+        verify(template, never()).selectOne(any(Query.class), eq(ProductData.class));
+    }
+
+    @Test
+    void completesEmptyWhenTheProductDisappearsBeforeBeingRead() {
+        when(template.update(any(Query.class), any(Update.class), eq(ProductData.class))).thenReturn(Mono.just(1L));
+        when(template.selectOne(any(Query.class), eq(ProductData.class))).thenReturn(Mono.empty());
+
+        StepVerifier.create(adapter.updateStock(UUID.randomUUID(), UUID.randomUUID(), 25)).verifyComplete();
+    }
+
+    @Test
+    void letsDatabaseErrorsPassUntouchedWhenUpdating() {
+        when(template.update(any(Query.class), any(Update.class), eq(ProductData.class)))
+                .thenReturn(Mono.error(new DataAccessResourceFailureException("connection lost")));
+
+        StepVerifier.create(adapter.updateStock(UUID.randomUUID(), UUID.randomUUID(), 25))
                 .expectError(DataAccessResourceFailureException.class)
                 .verify();
     }

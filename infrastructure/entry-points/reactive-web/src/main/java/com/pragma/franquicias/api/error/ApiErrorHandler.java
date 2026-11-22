@@ -16,6 +16,7 @@ import com.pragma.franquicias.model.franchise.exceptions.InvalidFranchiseNameExc
 import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameException;
 import com.pragma.franquicias.model.product.exceptions.InvalidProductNameException;
 import com.pragma.franquicias.model.product.exceptions.InvalidProductStockException;
+import com.pragma.franquicias.model.product.exceptions.ProductNotFoundException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +59,7 @@ public class ApiErrorHandler {
             entry(ServerWebInputException.class, ApiError.fixed(BAD_REQUEST, "INVALID_DATA", "Malformed request body")),
             entry(FranchiseNotFoundException.class, ApiError.of(NOT_FOUND, "FRANCHISE_NOT_FOUND")),
             entry(BranchNotFoundException.class, ApiError.of(NOT_FOUND, "BRANCH_NOT_FOUND")),
+            entry(ProductNotFoundException.class, ApiError.of(NOT_FOUND, "PRODUCT_NOT_FOUND")),
             entry(DuplicateFranchiseNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
             entry(DuplicateBranchNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
             entry(DuplicateProductNameException.class, ApiError.of(CONFLICT, "DUPLICATE_NAME")),
