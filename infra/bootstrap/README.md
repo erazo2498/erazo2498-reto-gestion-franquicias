@@ -23,6 +23,18 @@ If the account already has a GitHub OIDC provider (`aws iam list-open-id-connect
 terraform plan "-var=create_oidc_provider=false"
 ```
 
+## Which repository may assume the roles
+
+The trust policy compares the `sub` claim of GitHub's token. This repository uses **immutable subjects** (owner and
+repository IDs instead of names), so the value is not `repo:<owner>/<name>`. Read the real prefix and pass it as
+`github_subject_prefix` if the repository changes:
+
+```powershell
+gh api repos/<owner>/<name>/actions/oidc/customization/sub
+```
+
+With the wrong prefix the workflow fails at `configure-aws-credentials` with `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+
 ## After applying
 
 - `terraform output state_bucket` is the value for `-backend-config="bucket=..."` in `infra/`.
