@@ -1,4 +1,8 @@
 dependencies {
+    // Liquibase only speaks JDBC and runs once at startup; the API itself stays fully reactive (R2DBC).
+    implementation 'org.springframework.boot:spring-boot-starter-liquibase'
+    runtimeOnly 'org.postgresql:postgresql'
+
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'com.tngtech.archunit:archunit:1.4.1'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
