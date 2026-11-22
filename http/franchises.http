@@ -1,0 +1,184 @@
+### Ejemplos de peticiones para el cliente HTTP de IntelliJ (también funciona en VS Code con REST Client).
+### Elige el entorno "local" arriba a la derecha; las URL salen de http-client.env.json.
+### Requisitos: la base de datos en marcha (docker compose up -d) y la API arrancada con el perfil "local".
+
+### ---------------------------------------------------------------------------------------------------------------
+### Estado de la aplicación
+### ---------------------------------------------------------------------------------------------------------------
+
+### Health (200). Es lo único que expone el actuator.
+GET {{baseUrl}}/actuator/health
+
+###
+
+### El actuator no debe exponer nada más (404)
+GET {{baseUrl}}/actuator/prometheus
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### Crear franquicia: POST /api/v1/franchises
+### ---------------------------------------------------------------------------------------------------------------
+
+### Camino feliz: 201 con el id generado. {{$timestamp}} hace el nombre único para poder repetir la petición.
+# @name createFranchise
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "Burger Co {{$timestamp}}"
+}
+
+> {%
+    client.test("201 Created con id y nombre", function () {
+        client.assert(response.status === 201, "se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.id !== undefined, "falta el id");
+    });
+%}
+
+###
+
+### Los espacios de los extremos se eliminan: el nombre guardado es "Pizza Place".
+### Primera vez: 201. Si la repites: 409, porque el nombre ya existe.
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "   Pizza Place   "
+}
+
+###
+
+### Duplicado sin distinguir mayúsculas (409 DUPLICATE_NAME). Ejecuta antes la anterior.
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "PIZZA PLACE"
+}
+
+> {%
+    client.test("409 DUPLICATE_NAME", function () {
+        client.assert(response.status === 409, "se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.code === "DUPLICATE_NAME", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Ñ y tildes: 201 la primera vez y 409 si repites con otra capitalización ("ñANDÚ EXPRESS").
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json; charset=utf-8
+
+{
+  "name": "Ñandú Express"
+}
+
+###
+
+### Nombre de exactamente 120 caracteres (201 la primera vez; es el máximo permitido)
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### Errores de validación (400 INVALID_DATA)
+### ---------------------------------------------------------------------------------------------------------------
+
+### Nombre en blanco
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "   "
+}
+
+> {%
+    client.test("400 INVALID_DATA", function () {
+        client.assert(response.status === 400, "se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Nombre ausente
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{}
+
+###
+
+### Nombre nulo
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": null
+}
+
+###
+
+### Nombre de 121 caracteres (uno más del máximo)
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+
+###
+
+### El nombre debe ser texto: un número se rechaza (no se convierte en "123")
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": 123
+}
+
+###
+
+### JSON mal formado
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{ "name":
+
+###
+
+### Sin cuerpo
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### Otros errores
+### ---------------------------------------------------------------------------------------------------------------
+
+### Content-Type distinto de JSON (415 UNSUPPORTED_MEDIA_TYPE)
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: text/plain
+
+Burger Co
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### Documentación (solo con los perfiles local, dev o staging; en prod devuelve 404)
+### ---------------------------------------------------------------------------------------------------------------
+
+### Documento OpenAPI en JSON
+GET {{baseUrl}}/v3/api-docs
+
+###
+
+### Swagger UI: ábrela en el navegador -> {{baseUrl}}/swagger-ui.html
+GET {{baseUrl}}/swagger-ui.html
