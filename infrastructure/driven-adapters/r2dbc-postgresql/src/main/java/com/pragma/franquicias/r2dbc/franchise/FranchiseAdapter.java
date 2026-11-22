@@ -5,18 +5,20 @@ import static org.springframework.data.relational.core.query.Criteria.where;
 import com.pragma.franquicias.model.franchise.Franchise;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
 import com.pragma.franquicias.model.franchise.gateways.ExistsFranchiseGateway;
+import com.pragma.franquicias.model.franchise.gateways.RenameFranchiseGateway;
 import com.pragma.franquicias.model.franchise.gateways.SaveFranchiseGateway;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.query.Query;
+import org.springframework.data.relational.core.query.Update;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 @Repository
 @RequiredArgsConstructor
-public class FranchiseAdapter implements SaveFranchiseGateway, ExistsFranchiseGateway {
+public class FranchiseAdapter implements SaveFranchiseGateway, ExistsFranchiseGateway, RenameFranchiseGateway {
 
     private final R2dbcEntityTemplate template;
 
@@ -28,6 +30,18 @@ public class FranchiseAdapter implements SaveFranchiseGateway, ExistsFranchiseGa
                 .onErrorMap(
                         DuplicateKeyException.class,
                         error -> new DuplicateFranchiseNameException(franchise.getName()));
+    }
+
+    // Renames the franchise scoped by id. Completes empty when no row matched; the unique index turns a taken name into
+    // a duplicate-name error, and changing only the case of its own name is allowed (the row is its own match).
+    @Override
+    public Mono<Franchise> rename(UUID franchiseId, String name) {
+        Query scope = Query.query(where("id").is(franchiseId));
+        return template.update(scope, Update.update("name", name), FranchiseData.class)
+                .filter(updatedRows -> updatedRows > 0)
+                .flatMap(updatedRows -> template.selectOne(scope, FranchiseData.class))
+                .map(this::toEntity)
+                .onErrorMap(DuplicateKeyException.class, error -> new DuplicateFranchiseNameException(name));
     }
 
     @Override

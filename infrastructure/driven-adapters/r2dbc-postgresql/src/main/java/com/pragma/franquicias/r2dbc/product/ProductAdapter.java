@@ -8,6 +8,7 @@ import com.pragma.franquicias.model.product.Product;
 import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameException;
 import com.pragma.franquicias.model.product.gateways.DeleteProductGateway;
 import com.pragma.franquicias.model.product.gateways.FindTopStockProductsGateway;
+import com.pragma.franquicias.model.product.gateways.RenameProductGateway;
 import com.pragma.franquicias.model.product.gateways.SaveProductGateway;
 import com.pragma.franquicias.model.product.gateways.UpdateProductStockGateway;
 import io.r2dbc.spi.R2dbcException;
@@ -27,7 +28,11 @@ import reactor.core.publisher.Mono;
 @Repository
 @RequiredArgsConstructor
 public class ProductAdapter
-        implements SaveProductGateway, DeleteProductGateway, UpdateProductStockGateway, FindTopStockProductsGateway {
+        implements SaveProductGateway,
+                DeleteProductGateway,
+                UpdateProductStockGateway,
+                FindTopStockProductsGateway,
+                RenameProductGateway {
 
     // One statement for the whole franchise: for each branch, the LATERAL subquery picks its product of highest stock.
     // Ties are broken by the name (ignoring case) and then by the id, so the answer is always the same. A branch
@@ -82,6 +87,17 @@ public class ProductAdapter
                 .filter(updatedRows -> updatedRows > 0)
                 .flatMap(updatedRows -> template.selectOne(scope, ProductData.class))
                 .map(this::toEntity);
+    }
+
+    // Renames the product scoped to its branch. Completes empty when no row matched.
+    @Override
+    public Mono<Product> rename(UUID branchId, UUID productId, String name) {
+        Query scope = Query.query(where("id").is(productId).and(where("branchId").is(branchId)));
+        return template.update(scope, Update.update("name", name), ProductData.class)
+                .filter(updatedRows -> updatedRows > 0)
+                .flatMap(updatedRows -> template.selectOne(scope, ProductData.class))
+                .map(this::toEntity)
+                .onErrorMap(DuplicateKeyException.class, error -> new DuplicateProductNameException(name));
     }
 
     @Override
