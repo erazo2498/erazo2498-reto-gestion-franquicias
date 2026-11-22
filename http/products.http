@@ -1,0 +1,335 @@
+### Ejemplos de peticiones para el cliente HTTP de IntelliJ (también funciona en VS Code con REST Client).
+### Elige el entorno "local" arriba a la derecha; las URL salen de http-client.env.json.
+### Requisitos: la base de datos en marcha (docker compose up -d) y la API arrancada con el perfil "local".
+### Ejecuta primero las peticiones 1 y 2: crean la franquicia y la sucursal que usan las demás (no hay que copiar ningún UUID).
+### Son ejemplos seleccionados, no todos los casos; los casos completos los cubren las pruebas automáticas.
+
+### ---------------------------------------------------------------------------------------------------------------
+### 1. Preparación: una franquicia y una sucursal propias
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name franchiseForProducts
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "Franquicia de productos {{$timestamp}}"
+}
+
+###
+
+# @name branchForProducts
+POST {{baseUrl}}/api/v1/franchises/{{franchiseForProducts.response.body.id}}/branches
+Content-Type: application/json
+
+{
+  "name": "Centro"
+}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 2. Agregar producto: POST /api/v1/branches/{branchId}/products
+### ---------------------------------------------------------------------------------------------------------------
+
+### Camino feliz: 201 con id, branchId, nombre sin espacios sobrantes y el stock enviado.
+### Primera vez: 201. Si la repites: 409, porque el nombre ya existe en esa sucursal.
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "   Hamburguesa   ",
+  "stock": 10
+}
+
+> {%
+    client.test("201 Created con la sucursal, el nombre recortado y el stock", function () {
+        client.assert(response.status === 201, "se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.name === "Hamburguesa", "nombre inesperado: " + response.body.name);
+        client.assert(response.body.stock === 10, "stock inesperado: " + response.body.stock);
+    });
+%}
+
+###
+
+### Duplicado en la misma sucursal sin distinguir mayúsculas (409 DUPLICATE_NAME). Ejecuta antes la anterior.
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "HAMBURGUESA",
+  "stock": 3
+}
+
+> {%
+    client.test("409 DUPLICATE_NAME", function () {
+        client.assert(response.status === 409, "se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.code === "DUPLICATE_NAME", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Stock cero: es válido (201). Lo que no se admite es un stock negativo.
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Gaseosa",
+  "stock": 0
+}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 3. Errores
+### ---------------------------------------------------------------------------------------------------------------
+
+### La sucursal no existe (404 BRANCH_NOT_FOUND)
+POST {{baseUrl}}/api/v1/branches/00000000-0000-0000-0000-000000000000/products
+Content-Type: application/json
+
+{
+  "name": "Hamburguesa",
+  "stock": 10
+}
+
+> {%
+    client.test("404 BRANCH_NOT_FOUND", function () {
+        client.assert(response.status === 404, "se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.code === "BRANCH_NOT_FOUND", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Stock negativo (400 INVALID_DATA)
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Papas",
+  "stock": -1
+}
+
+> {%
+    client.test("400 INVALID_DATA", function () {
+        client.assert(response.status === 400, "se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Stock decimal (400 INVALID_DATA): no se corta a 1, se rechaza
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Papas",
+  "stock": 1.7
+}
+
+###
+
+### Stock como texto (400 INVALID_DATA): no se convierte en el número 5
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Papas",
+  "stock": "5"
+}
+
+###
+
+### Falta el stock (400 INVALID_DATA): es obligatorio, no se asume 0
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Papas"
+}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 4. Eliminar producto: DELETE /api/v1/branches/{branchId}/products/{productId}
+### El borrado es idempotente: responde 204 exista o no el producto. Hoy no hay endpoint de lectura; para comprobar que se
+### eliminó se puede volver a crear un producto con el mismo nombre (201: el nombre quedó libre) o mirar la base de datos.
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name productToDelete
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Cerveza {{$timestamp}}",
+  "stock": 24
+}
+
+###
+
+### Camino feliz: 204 sin cuerpo. Ejecuta antes la petición anterior.
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToDelete.response.body.id}}
+
+> {%
+    client.test("204 No Content", function () {
+        client.assert(response.status === 204, "se esperaba 204 y llegó " + response.status);
+    });
+%}
+
+###
+
+### Repetirlo da lo mismo (204): el producto ya no existe y eso no es un error.
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToDelete.response.body.id}}
+
+> {%
+    client.test("204 otra vez (idempotente)", function () {
+        client.assert(response.status === 204, "se esperaba 204 y llegó " + response.status);
+    });
+%}
+
+###
+
+### Un producto que nunca existió también da 204, y no se borra nada.
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/00000000-0000-0000-0000-000000000000
+
+###
+
+### El id del producto no es un UUID (400 INVALID_DATA)
+DELETE {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/abc
+
+> {%
+    client.test("400 INVALID_DATA", function () {
+        client.assert(response.status === 400, "se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 5. Modificar el stock: PATCH /api/v1/branches/{branchId}/products/{productId}/stock
+### Fija el valor nuevo (no suma ni resta) y responde 200 con el producto actualizado.
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name productForStock
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Pizza {{$timestamp}}",
+  "stock": 10
+}
+
+###
+
+### Camino feliz: 200 con el producto y el stock nuevo. Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productForStock.response.body.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": 25
+}
+
+> {%
+    client.test("200 OK con el stock nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.stock === 25, "stock inesperado: " + response.body.stock);
+    });
+%}
+
+###
+
+### El producto no existe en esa sucursal (404 PRODUCT_NOT_FOUND)
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/00000000-0000-0000-0000-000000000000/stock
+Content-Type: application/json
+
+{
+  "stock": 25
+}
+
+> {%
+    client.test("404 PRODUCT_NOT_FOUND", function () {
+        client.assert(response.status === 404, "se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.code === "PRODUCT_NOT_FOUND", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### Stock negativo (400 INVALID_DATA)
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productForStock.response.body.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": -3
+}
+
+###
+
+### Stock decimal (400 INVALID_DATA): no se corta a 2, se rechaza
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productForStock.response.body.id}}/stock
+Content-Type: application/json
+
+{
+  "stock": 2.5
+}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 6. Producto con más stock por sucursal de la franquicia creada arriba
+### ---------------------------------------------------------------------------------------------------------------
+
+GET {{baseUrl}}/api/v1/franchises/{{franchiseForProducts.response.body.id}}/top-stock-products
+
+> {%
+    client.test("200 con una fila por sucursal", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+        client.assert(Array.isArray(response.body), "se esperaba una lista");
+    });
+%}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 7. Renombrar un producto: PATCH /api/v1/branches/{branchId}/products/{productId}
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name productToRename
+POST {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products
+Content-Type: application/json
+
+{
+  "name": "Nuggets {{$timestamp}}",
+  "stock": 12
+}
+
+###
+
+### Camino feliz: 200 con el producto renombrado (el stock no cambia). Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "Nuggets de pollo {{$timestamp}}"
+}
+
+> {%
+    client.test("200 OK con el nombre nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.stock === 12, "el stock no debe cambiar: " + response.body.stock);
+    });
+%}
+
+###
+
+### Renombrar a un nombre que ya existe en la sucursal, sin distinguir mayúsculas (409 DUPLICATE_NAME)
+PATCH {{baseUrl}}/api/v1/branches/{{branchForProducts.response.body.id}}/products/{{productToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "HAMBURGUESA"
+}

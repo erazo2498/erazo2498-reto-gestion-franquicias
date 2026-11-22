@@ -1,47 +1,308 @@
-# Proyecto Base Implementando Clean Architecture
+# Reto Gestión de Franquicias
 
-## Antes de Iniciar
+API REST **reactiva** para gestionar una red de franquicias, sus sucursales y sus productos, construida con arquitectura hexagonal
+(scaffold de Clean Architecture de Bancolombia).
 
-Empezaremos por explicar los diferentes componentes del proyectos y partiremos de los componentes externos, continuando con los componentes core de negocio (dominio) y por �ltimo el inicio y configuraci�n de la aplicaci�n.
+## Estado del proyecto
 
-Lee el art�culo [Clean Architecture � Aislando los detalles](https://medium.com/bancolombia-tech/clean-architecture-aislando-los-detalles-4f9530f35d7a)
+| Funcionalidad | Estado |
+|---|---|
+| Crear franquicia (`POST /api/v1/franchises`) | Hecho |
+| Agregar sucursal (`POST /api/v1/franchises/{franchiseId}/branches`) | Hecho |
+| Agregar producto (`POST /api/v1/branches/{branchId}/products`) | Hecho |
+| Eliminar producto (`DELETE /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
+| Modificar stock (`PATCH /api/v1/branches/{branchId}/products/{productId}/stock`) | Hecho |
+| Producto con más stock por sucursal (`GET /api/v1/franchises/{franchiseId}/top-stock-products`) | Hecho |
+| Renombrar franquicia (`PATCH /api/v1/franchises/{franchiseId}`), sucursal (`PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}`) y producto (`PATCH /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
+| Resiliencia (timeout, reintentos con backoff, circuit breaker) | Hecho |
+| Imagen Docker, despliegue en AWS con Terraform | Pendiente |
 
-# Arquitectura
+## Stack
 
-![Clean Architecture](https://miro.medium.com/max/1400/1*ZdlHz8B0-qu9Y-QO3AXR_w.png)
+Java 17 · Spring Boot 4 + WebFlux (Reactor) · PostgreSQL 16 con R2DBC · Liquibase (migraciones en SQL) · Lombok · springdoc (OpenAPI)
+· Gradle · JUnit 5, Mockito, `StepVerifier`, ArchUnit, Testcontainers, JaCoCo.
 
-## Domain
+## Prerrequisitos
 
-Es el m�dulo m�s interno de la arquitectura, pertenece a la capa del dominio y encapsula la l�gica y reglas del negocio mediante modelos y entidades del dominio.
+- **Java 17** (JDK).
+- **Docker Desktop** en ejecución: levanta la base de datos local y las pruebas de integración la usan (Testcontainers).
+- Git. No hace falta instalar Gradle: el proyecto trae el wrapper (`gradlew`).
 
-## Usecases
+## Puesta en marcha
 
-Este m�dulo gradle perteneciente a la capa del dominio, implementa los casos de uso del sistema, define l�gica de aplicaci�n y reacciona a las invocaciones desde el m�dulo de entry points, orquestando los flujos hacia el m�dulo de entities.
+### 1. Base de datos local
 
-## Infrastructure
+```powershell
+Copy-Item .env.example .env        # en Linux/macOS: cp .env.example .env
+```
 
-### Helpers
+Abre `.env` y cambia `DB_PASSWORD` por una contraseña tuya. El archivo `.env` está ignorado por Git: nunca se sube.
 
-En el apartado de helpers tendremos utilidades generales para los Driven Adapters y Entry Points.
+```powershell
+docker compose up -d
+```
 
-Estas utilidades no est�n arraigadas a objetos concretos, se realiza el uso de generics para modelar comportamientos
-gen�ricos de los diferentes objetos de persistencia que puedan existir, este tipo de implementaciones se realizan
-basadas en el patr�n de dise�o [Unit of Work y Repository](https://medium.com/@krzychukosobudzki/repository-design-pattern-bc490b256006)
+Crea el contenedor `franquicias-postgres` (PostgreSQL 16) y publica su puerto en **`localhost:5433`**
+(el 5433 evita chocar con otro PostgreSQL que ya use el 5432).
 
-Estas clases no puede existir solas y debe heredarse su compartimiento en los **Driven Adapters**
+> **Importante:** `docker compose` es lo único que lee el `.env`. La aplicación **no** lo lee: recibe las variables del entorno (paso siguiente).
+> Si cambias la contraseña en `.env` después de haber creado el contenedor, PostgreSQL conserva la antigua en su volumen:
+> recrea la base con `docker compose down -v` y `docker compose up -d` (esto borra los datos locales).
 
-### Driven Adapters
+### 2. Arrancar la API
 
-Los driven adapter representan implementaciones externas a nuestro sistema, como lo son conexiones a servicios rest,
-soap, bases de datos, lectura de archivos planos, y en concreto cualquier origen y fuente de datos con la que debamos
-interactuar.
+La aplicación necesita estas variables de entorno. No tienen valores por defecto a propósito: sin ellas no arranca.
 
-### Entry Points
+| Variable | Valor local |
+|---|---|
+| `DB_HOST` | `localhost` |
+| `DB_PORT` | `5433` |
+| `DB_NAME` | `franquicias` |
+| `DB_USERNAME` | `franquicias` |
+| `DB_PASSWORD` | la que pusiste en `.env` |
 
-Los entry points representan los puntos de entrada de la aplicaci�n o el inicio de los flujos de negocio.
+Además, activa el perfil `local` para que Swagger esté disponible.
 
-## Application
+**Desde IntelliJ:** *Run → Edit Configurations →* `MainApplication`; en *Modify options* activa *Environment variables* y *Active profiles*:
 
-Este m�dulo es el m�s externo de la arquitectura, es el encargado de ensamblar los distintos m�dulos, resolver las dependencias y crear los beans de los casos de use (UseCases) de forma autom�tica, inyectando en �stos instancias concretas de las dependencias declaradas. Adem�s inicia la aplicaci�n (es el �nico m�dulo del proyecto donde encontraremos la funci�n �public static void main(String[] args)�.
+```
+DB_HOST=localhost;DB_PORT=5433;DB_NAME=franquicias;DB_USERNAME=franquicias;DB_PASSWORD=tu_contraseña
+```
 
-**Los beans de los casos de uso se disponibilizan automaticamente gracias a un '@ComponentScan' ubicado en esta capa.**
+Perfil activo: `local`.
+
+**Desde la terminal (PowerShell):** carga las variables de `.env` en esa terminal y arranca con Gradle.
+
+```powershell
+Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object { $k,$v = $_ -split '=',2; Set-Item "env:$($k.Trim())" $v.Trim() }
+./gradlew :app-service:bootRun --args='--spring.profiles.active=local'
+```
+
+**Desde la terminal (Linux/macOS):**
+
+```bash
+set -a; source .env; set +a
+./gradlew :app-service:bootRun --args='--spring.profiles.active=local'
+```
+
+Al arrancar, Liquibase crea las tablas `franchise`, `branch` y `product` (migraciones `001`, `002` y `003`) y el log termina con `Netty started on port 8080`.
+
+### 3. Probar
+
+- **Swagger UI:** <http://localhost:8080/swagger-ui.html> (solo con los perfiles `local`, `dev` o `staging`).
+- **Health:** <http://localhost:8080/actuator/health>
+- **Archivos `http/franchises.http`, `http/branches.http` y `http/products.http`:** ejemplos listos para el cliente HTTP de IntelliJ. Elige el
+  entorno `local` en el selector del editor. En `branches.http` ejecuta primero la petición 1 y en `products.http` las peticiones 1 y 2: crean la
+  franquicia y la sucursal que usan las demás.
+- **`curl`:**
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/franchises \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Burger Co"}'
+```
+
+## API
+
+### `POST /api/v1/franchises`: crear una franquicia
+
+Petición:
+
+```json
+{ "name": "Burger Co" }
+```
+
+- El nombre se recorta (se eliminan los espacios de los extremos) y debe tener **entre 1 y 120 caracteres**.
+- Debe ser **único sin distinguir mayúsculas ni minúsculas** (`Burger Co` y `BURGER CO` son el mismo nombre; también con `Ñ` y tildes).
+- Debe ser texto: un número como `123` se rechaza.
+
+Respuesta `201`:
+
+```json
+{ "id": "3f2b8c1e-7a4d-4e59-9c0a-1d6e5b8f2a47", "name": "Burger Co" }
+```
+
+### `POST /api/v1/franchises/{franchiseId}/branches`: agregar una sucursal a una franquicia
+
+Petición (`franchiseId` es el id de una franquicia existente):
+
+```json
+{ "name": "Centro" }
+```
+
+- El nombre sigue las mismas reglas que el de la franquicia: se recorta, de **1 a 120 caracteres** y debe ser texto.
+- Es **único dentro de su franquicia, sin distinguir mayúsculas**: dos franquicias distintas pueden tener cada una una sucursal `Centro`.
+- Si `franchiseId` no es un UUID responde `400`; si es un UUID que no existe, `404`.
+- Una franquicia con sucursales no se puede borrar (la base de datos lo impide); hoy no hay endpoint para borrar franquicias.
+
+Respuesta `201`:
+
+```json
+{ "id": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "franchiseId": "3f2b8c1e-7a4d-4e59-9c0a-1d6e5b8f2a47", "name": "Centro" }
+```
+
+### `POST /api/v1/branches/{branchId}/products`: agregar un producto a una sucursal
+
+Petición (`branchId` es el id de una sucursal existente):
+
+```json
+{ "name": "Hamburguesa", "stock": 10 }
+```
+
+- El nombre sigue las mismas reglas que los anteriores: se recorta, de **1 a 120 caracteres** y debe ser texto.
+- Es **único dentro de su sucursal, sin distinguir mayúsculas**: dos sucursales distintas pueden tener cada una un producto `Hamburguesa`.
+- El `stock` es **obligatorio** y debe ser un **número entero mayor o igual que 0**. Se rechazan (con `400`) un valor ausente o `null`, los
+  negativos, los decimales (`1.7`), el texto (`"5"`) y los números mayores que el máximo de un entero; nada se convierte ni se corta en silencio.
+- Si `branchId` no es un UUID responde `400`; si es un UUID que no existe, `404`.
+- Una sucursal con productos no se puede borrar (la base de datos lo impide); hoy no hay endpoint para borrar sucursales.
+
+Respuesta `201`:
+
+```json
+{ "id": "5d7e2a91-3c4b-4a6f-9b18-0e2f7c6d4a53", "branchId": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "name": "Hamburguesa", "stock": 10 }
+```
+
+### `DELETE /api/v1/branches/{branchId}/products/{productId}`: eliminar un producto de una sucursal
+
+Sin cuerpo en la petición. Respuesta `204` sin cuerpo.
+
+- El borrado es **idempotente**: responde `204` tanto si el producto existía como si no, y repetirlo deja el mismo estado y la misma respuesta.
+  Por eso este endpoint **no tiene `404`**.
+- Solo se borra si el producto pertenece a la sucursal de la ruta: un producto de **otra** sucursal no se toca (y también se responde `204`).
+- Si `branchId` o `productId` no son un UUID responde `400`.
+- El nombre del producto borrado queda libre: se puede crear otro con el mismo nombre en esa sucursal.
+
+### `PATCH /api/v1/branches/{branchId}/products/{productId}/stock`: modificar el stock de un producto
+
+Petición:
+
+```json
+{ "stock": 25 }
+```
+
+- **Fija** el stock al valor enviado (no suma ni resta) y responde `200` con el producto actualizado.
+- Las reglas del stock son las mismas que al crear: **obligatorio, entero y mayor o igual que 0**; se rechazan (con `400`) un valor ausente o `null`, los
+  negativos, los decimales, el texto y los números mayores que el máximo de un entero.
+- Solo actualiza si el producto pertenece a la sucursal de la ruta; si no (no existe, es de otra sucursal o la sucursal no existe) responde `404`
+  `PRODUCT_NOT_FOUND`, y el producto de otra sucursal no cambia.
+- Enviar dos veces el mismo valor deja el mismo estado. Con peticiones simultáneas, gana la última escritura.
+
+Respuesta `200`:
+
+```json
+{ "id": "5d7e2a91-3c4b-4a6f-9b18-0e2f7c6d4a53", "branchId": "9a1c4e72-5b3d-4f08-8e61-2c7d0a9b3f15", "name": "Hamburguesa", "stock": 25 }
+```
+
+### `GET /api/v1/franchises/{franchiseId}/top-stock-products`: producto con más stock por sucursal
+
+Sin cuerpo. Responde `200` con **una fila por sucursal** de la franquicia, ordenadas por nombre de sucursal (sin distinguir mayúsculas):
+
+```json
+[
+  { "branchId": "9a1c4e72-...", "branchName": "Centro", "product": { "id": "5d7e2a91-...", "name": "Hamburguesa", "stock": 40 } },
+  { "branchId": "c1f6a3d8-...", "branchName": "Norte",  "product": null }
+]
+```
+
+- **Empates:** si varios productos de una sucursal tienen el mismo stock máximo, se devuelve uno solo: el de nombre menor (sin distinguir mayúsculas) y, si aún empatan, el de id menor. Así la respuesta es siempre la misma.
+- Una sucursal **sin productos** aparece con `"product": null`; un producto con stock `0` también cuenta si es el único.
+- Una franquicia sin sucursales responde `200` con `[]`; una franquicia que no existe, `404 FRANCHISE_NOT_FOUND`; un id que no es UUID, `400`.
+- Se resuelve con **una sola consulta SQL** (`LEFT JOIN LATERAL`); la existencia de la franquicia se comprueba aparte.
+
+### Renombrar: `PATCH` de franquicia, sucursal y producto
+
+Los tres reciben el mismo cuerpo y responden `200` con el recurso actualizado:
+
+```json
+{ "name": "Pizza Co" }
+```
+
+| Recurso | Ruta | Unicidad del nombre |
+|---|---|---|
+| Franquicia | `PATCH /api/v1/franchises/{franchiseId}` | global, sin distinguir mayúsculas |
+| Sucursal | `PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}` | dentro de su franquicia |
+| Producto | `PATCH /api/v1/branches/{branchId}/products/{productId}` | dentro de su sucursal |
+
+- El nombre se recorta y debe tener **de 1 a 120 caracteres** y ser texto; las reglas son las mismas que al crear.
+- El renombrado está **acotado al padre**: una sucursal solo se renombra a través de su franquicia y un producto a través de su sucursal; si no coincide, `404` y nada cambia.
+- Cambiar solo las mayúsculas del propio nombre (`Burger Co` a `BURGER CO`) está permitido; usar el nombre de **otro** recurso del mismo padre da `409`.
+- El stock del producto no cambia al renombrarlo. Enviar dos veces el mismo nombre deja el mismo estado.
+
+### Errores
+
+Todos los errores usan el mismo formato: `{ "code": "...", "message": "...", "timestamp": "..." }`.
+
+| HTTP | `code` | Cuándo |
+|---|---|---|
+| `400` | `INVALID_DATA` | Nombre ausente, nulo, en blanco o de más de 120 caracteres; stock ausente, negativo, decimal o que no es un entero; JSON mal formado; nombre que no es texto; sin cuerpo; `franchiseId`, `branchId` o `productId` que no son un UUID |
+| `404` | `FRANCHISE_NOT_FOUND` | La franquicia a la que se quiere agregar la sucursal no existe |
+| `404` | `BRANCH_NOT_FOUND` | La sucursal a la que se quiere agregar el producto no existe |
+| `404` | `PRODUCT_NOT_FOUND` | Al modificar el stock: el producto no está en esa sucursal (no existe, es de otra sucursal o la sucursal no existe) |
+| `409` | `DUPLICATE_NAME` | Ya existe una franquicia con ese nombre, una sucursal con ese nombre en esa franquicia o un producto con ese nombre en esa sucursal (ignorando mayúsculas) |
+| `415` | `UNSUPPORTED_MEDIA_TYPE` | El `Content-Type` no es `application/json` |
+| `503` | `SERVICE_UNAVAILABLE` | La base de datos no responde a tiempo, está caída o el circuit breaker está abierto (ver Resiliencia) |
+| `500` | `INTERNAL_ERROR` | Error inesperado; el detalle solo se escribe en el log del servidor |
+
+## Resiliencia
+
+Toda llamada a la base de datos pasa por `ResilientOperations` (`infrastructure/driven-adapters/r2dbc-postgresql/.../resilience`), que aplica tres patrones de
+dentro hacia fuera, con [Resilience4j](https://resilience4j.readme.io/) para el circuit breaker y el retry:
+
+1. **Timeout:** ningún intento espera más de `adapters.resilience.timeout` (3 s por defecto).
+2. **Retry con backoff exponencial:** hasta `maxAttempts` (3) intentos, empezando en `backoff` (100 ms) y duplicando. Solo se reintentan los fallos **transitorios** de
+   conexión; **no** se reintentan los errores de negocio (un nombre duplicado lo seguirá siendo) ni los timeouts (la escritura pudo haberse hecho).
+3. **Circuit breaker:** si falla un `failureRateThreshold` % (50) de las últimas `slidingWindowSize` (10) llamadas, con al menos `minimumNumberOfCalls` (5), se **abre** durante
+   `waitInOpenState` (10 s) y responde de inmediato sin tocar la base de datos. Los errores de negocio no cuentan como fallos.
+
+Lo que ve el cliente es `503 SERVICE_UNAVAILABLE` con el formato de error habitual, nunca un error crudo de infraestructura. Todos los valores tienen un valor por defecto y se
+pueden ajustar con las propiedades `adapters.resilience.*`.
+
+**Backpressure:** WebFlux y Reactor lo gestionan de forma nativa. El suscriptor pide elementos (`request(n)`) y el productor no emite más de los pedidos; en este proyecto la consulta
+de lista (`top-stock-products`) se consume como `Flux` desde R2DBC, que entrega las filas bajo demanda, y solo se materializa en una lista al final, en el handler, para responder el JSON.
+
+## Pruebas y cobertura
+
+```powershell
+./gradlew build
+```
+
+Compila, ejecuta todas las pruebas (incluidas las de integración con PostgreSQL en Testcontainers, por eso Docker debe estar en marcha) y verifica
+las reglas de arquitectura y de código. El mismo comando lo ejecuta el CI en cada pull request.
+
+- **Cobertura:** el build falla si la cobertura de líneas del conjunto de módulos baja del **70 %**. El reporte HTML queda en
+  `build/reports/jacoco/jacocoAggregatedReport/html/index.html`. Para probar otro mínimo: `./gradlew jacocoCoverageCheck -PcoverageMinimum=0.9`.
+- **Reglas automáticas** (`applications/app-service/src/test/java/com/pragma/franquicias/rules`): el dominio no depende de Spring ni de la
+  infraestructura, no hay controllers (solo `RouterFunction` y handlers), y el código fuente no usa `.block()`, `java.util.stream`,
+  `try/catch` en flujos, `if` en flujos ni `javax.*`, ni contiene secretos.
+- **Caché de configuración de Gradle:** si generas un módulo nuevo con el plugin y `./gradlew build` no lo toma, ejecútalo una vez con
+  `--no-configuration-cache`.
+
+## Arquitectura
+
+Dependencias hacia adentro: la infraestructura implementa los puertos que define el dominio, nunca al revés.
+
+| Módulo | Contenido |
+|---|---|
+| `domain/model` | Entidades (Lombok `@Builder`, inmutables y que se validan al construirse) y puertos (`SaveFranchiseGateway`) |
+| `domain/usecase` | Casos de uso: Java puro + Reactor (`CreateFranchiseUseCase`) |
+| `infrastructure/driven-adapters/r2dbc-postgresql` | Adaptador de persistencia (`FranchiseAdapter`) y pool de conexiones |
+| `infrastructure/entry-points/reactive-web` | `RouterFunction`, handlers, manejo de errores y documentación OpenAPI |
+| `applications/app-service` | Arranque, configuración y migraciones Liquibase (`src/main/resources/db/changelog`) |
+| `deployment/` | `Dockerfile` (plantilla del plugin, aún sin probar) |
+
+Decisiones que conviene conocer:
+
+- **La unicidad del nombre la garantiza la base de datos** (índice único sobre `lower(name)`), no una consulta previa: así dos peticiones
+  simultáneas con el mismo nombre no pueden crear dos franquicias; una gana y la otra recibe `409`.
+- **Liquibase usa JDBC y corre una sola vez al arrancar**, antes de atender peticiones. La API en sí es 100 % reactiva (R2DBC).
+- **Las migraciones no se editan una vez aplicadas:** cada cambio de esquema es un archivo nuevo en `db/changelog/changes/`.
+- **El actuator solo expone `health`.** Swagger y `/v3/api-docs` están apagados por defecto y en `prod`.
+
+Para generar piezas nuevas se usan las tareas del plugin: `./gradlew gm` (modelo), `guc` (caso de uso), `gda` (adaptador de salida) y
+`gep` (entry point).
+
+## Flujo de trabajo
+
+Ramas `main`, `develop` y `feature/NNN-nombre` (una por funcionalidad, desde `develop`, integrada con un pull request).
+Commits atómicos y convencionales (`feat:`, `test:`, `docs:`, `build:`, `chore:`…). Cada funcionalidad se desarrolla con pruebas primero
+(`StepVerifier`), viéndolas fallar antes de escribir el código.

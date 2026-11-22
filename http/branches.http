@@ -1,0 +1,135 @@
+### Ejemplos de peticiones para el cliente HTTP de IntelliJ (también funciona en VS Code con REST Client).
+### Elige el entorno "local" arriba a la derecha; las URL salen de http-client.env.json.
+### Requisitos: la base de datos en marcha (docker compose up -d) y la API arrancada con el perfil "local".
+### Ejecuta primero la petición 1: crea la franquicia y las demás usan su id (no hay que copiar ningún UUID).
+### Son ejemplos seleccionados, no todos los casos; los casos completos los cubren las pruebas automáticas.
+
+### ---------------------------------------------------------------------------------------------------------------
+### 1. Preparación: una franquicia propia para las sucursales
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name franchiseForBranches
+POST {{baseUrl}}/api/v1/franchises
+Content-Type: application/json
+
+{
+  "name": "Franquicia de sucursales {{$timestamp}}"
+}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 2. Agregar sucursal: POST /api/v1/franchises/{franchiseId}/branches
+### ---------------------------------------------------------------------------------------------------------------
+
+### Camino feliz: 201 con id, franchiseId y nombre sin espacios sobrantes.
+### Primera vez: 201. Si la repites: 409, porque el nombre ya existe en esa franquicia.
+POST {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches
+Content-Type: application/json
+
+{
+  "name": "   Centro   "
+}
+
+> {%
+    client.test("201 Created con la franquicia y el nombre recortado", function () {
+        client.assert(response.status === 201, "se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.name === "Centro", "nombre inesperado: " + response.body.name);
+        client.assert(response.body.franchiseId !== undefined, "falta franchiseId");
+    });
+%}
+
+###
+
+### Duplicado en la misma franquicia sin distinguir mayúsculas (409 DUPLICATE_NAME). Ejecuta antes la anterior.
+POST {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches
+Content-Type: application/json
+
+{
+  "name": "CENTRO"
+}
+
+> {%
+    client.test("409 DUPLICATE_NAME", function () {
+        client.assert(response.status === 409, "se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.code === "DUPLICATE_NAME", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 3. Errores
+### ---------------------------------------------------------------------------------------------------------------
+
+### La franquicia no existe (404 FRANCHISE_NOT_FOUND)
+POST {{baseUrl}}/api/v1/franchises/00000000-0000-0000-0000-000000000000/branches
+Content-Type: application/json
+
+{
+  "name": "Centro"
+}
+
+> {%
+    client.test("404 FRANCHISE_NOT_FOUND", function () {
+        client.assert(response.status === 404, "se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.code === "FRANCHISE_NOT_FOUND", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### El id de la franquicia no es un UUID (400 INVALID_DATA, no 404)
+POST {{baseUrl}}/api/v1/franchises/abc/branches
+Content-Type: application/json
+
+{
+  "name": "Centro"
+}
+
+###
+
+### Nombre en blanco (400 INVALID_DATA)
+POST {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches
+Content-Type: application/json
+
+{
+  "name": "   "
+}
+
+> {%
+    client.test("400 INVALID_DATA", function () {
+        client.assert(response.status === 400, "se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.code === "INVALID_DATA", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### 4. Renombrar una sucursal: PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}
+### ---------------------------------------------------------------------------------------------------------------
+
+# @name branchToRename
+POST {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches
+Content-Type: application/json
+
+{
+  "name": "Oeste {{$timestamp}}"
+}
+
+###
+
+### Camino feliz: 200 con la sucursal renombrada. Ejecuta antes la petición anterior.
+PATCH {{baseUrl}}/api/v1/franchises/{{franchiseForBranches.response.body.id}}/branches/{{branchToRename.response.body.id}}
+Content-Type: application/json
+
+{
+  "name": "Oeste renovada {{$timestamp}}"
+}
+
+> {%
+    client.test("200 OK con el nombre nuevo", function () {
+        client.assert(response.status === 200, "se esperaba 200 y llegó " + response.status);
+    });
+%}
