@@ -182,3 +182,25 @@ GET {{baseUrl}}/v3/api-docs
 
 ### Swagger UI: ábrela en el navegador -> {{baseUrl}}/swagger-ui.html
 GET {{baseUrl}}/swagger-ui.html
+
+###
+
+### ---------------------------------------------------------------------------------------------------------------
+### Producto con más stock por sucursal: GET /api/v1/franchises/{franchiseId}/top-stock-products
+### Una fila por sucursal con su producto de mayor stock (empates: nombre y luego id). Una sucursal sin productos sale con "product": null.
+### ---------------------------------------------------------------------------------------------------------------
+
+### Usa el id de una franquicia que ya tenga sucursales y productos (por ejemplo, la creada en products.http).
+GET {{baseUrl}}/api/v1/franchises/00000000-0000-0000-0000-000000000000/top-stock-products
+
+> {%
+    client.test("404 FRANCHISE_NOT_FOUND si la franquicia no existe", function () {
+        client.assert(response.status === 404, "se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.code === "FRANCHISE_NOT_FOUND", "código inesperado: " + response.body.code);
+    });
+%}
+
+###
+
+### El id de la franquicia no es un UUID (400 INVALID_DATA)
+GET {{baseUrl}}/api/v1/franchises/abc/top-stock-products
