@@ -15,11 +15,13 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class ProductHandler {
 
+    private static final String INVALID_BRANCH_ID = "Branch id must be a valid UUID";
+
     private final CreateProductUseCase createProductUseCase;
     private final ApiErrorHandler apiErrorHandler;
 
     public Mono<ServerResponse> create(ServerRequest request) {
-        return branchId(request)
+        return pathUuid(request, "branchId", INVALID_BRANCH_ID)
                 .flatMap(branchId -> request.bodyToMono(CreateProductRequest.class)
                         .defaultIfEmpty(new CreateProductRequest(null, null))
                         .flatMap(body -> createProductUseCase.execute(branchId, body.name(), body.stock())))
@@ -28,10 +30,9 @@ public class ProductHandler {
                 .as(apiErrorHandler::handle);
     }
 
-    private Mono<UUID> branchId(ServerRequest request) {
-        return Mono.fromSupplier(() -> UUID.fromString(request.pathVariable("branchId")))
-                .onErrorMap(
-                        IllegalArgumentException.class,
-                        error -> new InvalidPathIdException("Branch id must be a valid UUID"));
+    // Reads a path variable as a UUID; anything else is a 400, not a 404.
+    private Mono<UUID> pathUuid(ServerRequest request, String variable, String message) {
+        return Mono.fromSupplier(() -> UUID.fromString(request.pathVariable(variable)))
+                .onErrorMap(IllegalArgumentException.class, error -> new InvalidPathIdException(message));
     }
 }
