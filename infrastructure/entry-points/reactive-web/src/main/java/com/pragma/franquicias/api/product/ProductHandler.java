@@ -3,6 +3,7 @@ package com.pragma.franquicias.api.product;
 import com.pragma.franquicias.api.error.ApiErrorHandler;
 import com.pragma.franquicias.api.error.InvalidPathIdException;
 import com.pragma.franquicias.usecase.createproduct.CreateProductUseCase;
+import com.pragma.franquicias.usecase.deleteproduct.DeleteProductUseCase;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -16,8 +17,10 @@ import reactor.core.publisher.Mono;
 public class ProductHandler {
 
     private static final String INVALID_BRANCH_ID = "Branch id must be a valid UUID";
+    private static final String INVALID_PRODUCT_ID = "Product id must be a valid UUID";
 
     private final CreateProductUseCase createProductUseCase;
+    private final DeleteProductUseCase deleteProductUseCase;
     private final ApiErrorHandler apiErrorHandler;
 
     public Mono<ServerResponse> create(ServerRequest request) {
@@ -27,6 +30,15 @@ public class ProductHandler {
                         .flatMap(body -> createProductUseCase.execute(branchId, body.name(), body.stock())))
                 .map(ProductResponse::from)
                 .flatMap(response -> ServerResponse.status(HttpStatus.CREATED).bodyValue(response))
+                .as(apiErrorHandler::handle);
+    }
+
+    // Deleting is idempotent: 204 whether the product existed or not. Clients that want to check query it.
+    public Mono<ServerResponse> delete(ServerRequest request) {
+        return pathUuid(request, "branchId", INVALID_BRANCH_ID)
+                .zipWith(pathUuid(request, "productId", INVALID_PRODUCT_ID))
+                .flatMap(ids -> deleteProductUseCase.execute(ids.getT1(), ids.getT2()))
+                .then(Mono.defer(() -> ServerResponse.noContent().build()))
                 .as(apiErrorHandler::handle);
     }
 

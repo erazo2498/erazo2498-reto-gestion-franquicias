@@ -11,6 +11,7 @@ import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameExcep
 import com.pragma.franquicias.model.product.exceptions.InvalidProductNameException;
 import com.pragma.franquicias.model.product.exceptions.InvalidProductStockException;
 import com.pragma.franquicias.usecase.createproduct.CreateProductUseCase;
+import com.pragma.franquicias.usecase.deleteproduct.DeleteProductUseCase;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,6 +37,10 @@ class CreateProductRouteTest {
 
     @MockitoBean
     private CreateProductUseCase createProductUseCase;
+
+    // The handler also needs the delete use case to be built.
+    @MockitoBean
+    private DeleteProductUseCase deleteProductUseCase;
 
     private WebTestClient.RequestHeadersSpec<?> postJson(Object branchId, String body) {
         return webTestClient.post().uri(PATH, branchId).contentType(MediaType.APPLICATION_JSON).bodyValue(body);
