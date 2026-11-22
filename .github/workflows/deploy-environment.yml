@@ -1,0 +1,71 @@
+name: Deploy environment
+
+# Reusable: deploy.yml calls it once per environment. The job runs inside the GitHub Environment of the same
+# name, which provides AWS_ROLE_ARN and any approval rule. AWS access is by OIDC: no keys are stored.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    # Two applies on the same state must never run at once.
+    concurrency:
+      group: terraform-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: 'false'
+      ENVIRONMENT: ${{ inputs.environment }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: image
+      - run: docker load --input image.tar.gz
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+      - name: Initialize the remote state of this environment
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          terraform -chdir=infra init -reconfigure \
+            -backend-config="backends/${ENVIRONMENT}.hcl" \
+            -backend-config="bucket=reto-franquicias-tfstate-${ACCOUNT}"
+      # The repository must exist before the image can be pushed (a new environment has none yet).
+      - name: Create the ECR repository
+        run: terraform -chdir=infra apply -auto-approve -target=module.ecr -var-file="envs/${ENVIRONMENT}.tfvars" -var="image_tag=${IMAGE_TAG}"
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Push the image
+        run: |
+          REPOSITORY=$(terraform -chdir=infra output -raw ecr_repository_url)
+          docker tag reto-gestion-franquicias:ci "${REPOSITORY}:${IMAGE_TAG}"
+          docker push "${REPOSITORY}:${IMAGE_TAG}"
+      - name: Apply the environment
+        run: terraform -chdir=infra apply -auto-approve -var-file="envs/${ENVIRONMENT}.tfvars" -var="image_tag=${IMAGE_TAG}"
+      - name: Check that the API answers
+        run: |
+          URL=$(terraform -chdir=infra output -raw api_url)
+          for attempt in $(seq 1 24); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' "${URL}/actuator/health" || true)
+            echo "attempt ${attempt}: ${CODE}"
+            [ "${CODE}" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "The API did not answer 200 on /actuator/health" >&2
+          exit 1

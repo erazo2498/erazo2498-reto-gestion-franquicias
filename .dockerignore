@@ -1,0 +1,15 @@
+.git
+.gradle
+.idea
+.claude
+**/build
+infra
+.github
+.env
+**/.env
+**/.env.*
+!.env.example
+*.tfstate
+*.tfvars
+.terraform
+*.md

@@ -1,0 +1,52 @@
+name: Deploy
+
+# develop -> dev. main -> staging and then prod (prod waits for the reviewer set in its GitHub Environment).
+# The image is built once per commit and the same image goes to every environment.
+on:
+  push:
+    branches: [develop, main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "value=v${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - run: docker build -f deployment/Dockerfile -t reto-gestion-franquicias:ci .
+      - run: docker save reto-gestion-franquicias:ci | gzip > image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: image.tar.gz
+          retention-days: 1
+
+  dev:
+    if: github.ref == 'refs/heads/develop'
+    needs: image
+    uses: ./.github/workflows/deploy-environment.yml
+    with:
+      environment: dev
+      image_tag: ${{ needs.image.outputs.tag }}
+
+  staging:
+    if: github.ref == 'refs/heads/main'
+    needs: image
+    uses: ./.github/workflows/deploy-environment.yml
+    with:
+      environment: staging
+      image_tag: ${{ needs.image.outputs.tag }}
+
+  prod:
+    if: github.ref == 'refs/heads/main'
+    needs: [image, staging]
+    uses: ./.github/workflows/deploy-environment.yml
+    with:
+      environment: prod
+      image_tag: ${{ needs.image.outputs.tag }}

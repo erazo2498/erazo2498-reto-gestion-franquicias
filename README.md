@@ -15,7 +15,7 @@ API REST **reactiva** para gestionar una red de franquicias, sus sucursales y su
 | Producto con más stock por sucursal (`GET /api/v1/franchises/{franchiseId}/top-stock-products`) | Hecho |
 | Renombrar franquicia (`PATCH /api/v1/franchises/{franchiseId}`), sucursal (`PATCH /api/v1/franchises/{franchiseId}/branches/{branchId}`) y producto (`PATCH /api/v1/branches/{branchId}/products/{productId}`) | Hecho |
 | Resiliencia (timeout, reintentos con backoff, circuit breaker) | Hecho |
-| Imagen Docker, despliegue en AWS con Terraform | Pendiente |
+| Imagen Docker y despliegue en AWS con Terraform | `dev` desplegado; `staging` y `prod` definidos, sin desplegar |
 
 ## Stack
 
@@ -301,6 +301,17 @@ Decisiones que conviene conocer:
 
 Para generar piezas nuevas se usan las tareas del plugin: `./gradlew gm` (modelo), `guc` (caso de uso), `gda` (adaptador de salida) y
 `gep` (entry point).
+
+## Despliegue en AWS
+
+La API corre en AWS (ECS Fargate detrás de un balanceador, imagen en ECR, PostgreSQL en RDS, credenciales en Secrets Manager) y se despliega con
+Terraform en tres ambientes: `dev`, `staging` y `prod`. Imagen:
+
+```bash
+docker build -f deployment/Dockerfile -t reto-gestion-franquicias .
+```
+
+Cómo desplegar a mano o con GitHub Actions, cómo usar la API en la nube, costos y cómo apagarlo: [`infra/README.md`](infra/README.md).
 
 ## Flujo de trabajo
 
