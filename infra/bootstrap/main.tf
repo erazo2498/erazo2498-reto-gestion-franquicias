@@ -109,7 +109,7 @@ data "aws_iam_policy_document" "deploy_assume" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_url}:sub"
-      values   = ["repo:${var.github_repository}:environment:${each.key}"]
+      values   = ["${var.github_subject_prefix}:environment:${each.key}"]
     }
   }
 }

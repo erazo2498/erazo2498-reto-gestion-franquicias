@@ -10,10 +10,14 @@ variable "project" {
   default     = "reto-franquicias"
 }
 
-variable "github_repository" {
-  description = "GitHub repository (owner/name) allowed to assume the deploy roles."
+variable "github_subject_prefix" {
+  description = <<-EOT
+    Start of the "sub" claim that GitHub puts in its OIDC token for this repository. This repository uses immutable
+    subjects (owner and repository IDs), so it is not just "repo:<owner>/<name>". Read the real value with:
+    gh api repos/<owner>/<name>/actions/oidc/customization/sub  (field sub_claim_prefix)
+  EOT
   type        = string
-  default     = "erazo2498/reto-gestion-franquicias"
+  default     = "repo:erazo2498@61292603/reto-gestion-franquicias@1467641897"
 }
 
 variable "environments" {

@@ -161,6 +161,7 @@ Terraform solo borra lo que creó. Después revisa que no queden recursos suelto
 | `terraform apply` falla al subir una etiqueta ya usada | Las etiquetas de ECR son inmutables: usa un commit nuevo. |
 | El ALB responde 502 o 503 los primeros 1–2 minutos | La tarea aún arranca (Spring + migración). Espera; si no se arregla, mira el log group `/ecs/reto-franquicias-<ambiente>`. |
 | `terraform init` no encuentra el bucket | Pasa siempre `-backend-config="bucket=..."` y comprueba la cuenta con `aws sts get-caller-identity`. |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` en `configure-aws-credentials` | La condición `sub` del rol no coincide con la del token de GitHub (este repo usa subjects inmutables con IDs). Ver `bootstrap/README.md`. |
 | Un job de GitHub dice `AccessDenied` | El rol del ambiente es de mínimo privilegio y puede faltarle un permiso: se ajusta en `bootstrap/main.tf`. |
 | La app no conecta con RDS | PostgreSQL 16 exige TLS: la tarea necesita `DB_SSL=true` (viene del secreto de conexión). |
 
