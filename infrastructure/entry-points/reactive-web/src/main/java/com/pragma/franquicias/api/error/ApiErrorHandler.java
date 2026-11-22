@@ -1,6 +1,9 @@
 package com.pragma.franquicias.api.error;
 
+import com.pragma.franquicias.model.branch.exceptions.DuplicateBranchNameException;
+import com.pragma.franquicias.model.branch.exceptions.InvalidBranchNameException;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
+import com.pragma.franquicias.model.franchise.exceptions.FranchiseNotFoundException;
 import com.pragma.franquicias.model.franchise.exceptions.InvalidFranchiseNameException;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +26,18 @@ public class ApiErrorHandler {
                         error -> body(HttpStatus.BAD_REQUEST, "INVALID_DATA", error.getMessage()))
                 .onErrorResume(
                         DuplicateFranchiseNameException.class,
+                        error -> body(HttpStatus.CONFLICT, "DUPLICATE_NAME", error.getMessage()))
+                .onErrorResume(
+                        InvalidBranchNameException.class,
+                        error -> body(HttpStatus.BAD_REQUEST, "INVALID_DATA", error.getMessage()))
+                .onErrorResume(
+                        InvalidPathIdException.class,
+                        error -> body(HttpStatus.BAD_REQUEST, "INVALID_DATA", error.getMessage()))
+                .onErrorResume(
+                        FranchiseNotFoundException.class,
+                        error -> body(HttpStatus.NOT_FOUND, "FRANCHISE_NOT_FOUND", error.getMessage()))
+                .onErrorResume(
+                        DuplicateBranchNameException.class,
                         error -> body(HttpStatus.CONFLICT, "DUPLICATE_NAME", error.getMessage()))
                 .onErrorResume(
                         ServerWebInputException.class,
