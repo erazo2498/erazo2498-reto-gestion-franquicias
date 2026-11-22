@@ -2,13 +2,17 @@ package com.pragma.franquicias.r2dbc.product;
 
 import static org.springframework.data.relational.core.query.Criteria.where;
 
+import com.pragma.franquicias.model.branch.BranchTopProduct;
 import com.pragma.franquicias.model.branch.exceptions.BranchNotFoundException;
 import com.pragma.franquicias.model.product.Product;
 import com.pragma.franquicias.model.product.exceptions.DuplicateProductNameException;
 import com.pragma.franquicias.model.product.gateways.DeleteProductGateway;
+import com.pragma.franquicias.model.product.gateways.FindTopStockProductsGateway;
 import com.pragma.franquicias.model.product.gateways.SaveProductGateway;
 import com.pragma.franquicias.model.product.gateways.UpdateProductStockGateway;
 import io.r2dbc.spi.R2dbcException;
+import io.r2dbc.spi.Readable;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -17,11 +21,31 @@ import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.query.Query;
 import org.springframework.data.relational.core.query.Update;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Repository
 @RequiredArgsConstructor
-public class ProductAdapter implements SaveProductGateway, DeleteProductGateway, UpdateProductStockGateway {
+public class ProductAdapter
+        implements SaveProductGateway, DeleteProductGateway, UpdateProductStockGateway, FindTopStockProductsGateway {
+
+    // One statement for the whole franchise: for each branch, the LATERAL subquery picks its product of highest stock.
+    // Ties are broken by the name (ignoring case) and then by the id, so the answer is always the same. A branch
+    // without products still produces a row, with null product columns (LEFT JOIN).
+    private static final String TOP_STOCK_PRODUCTS = """
+            SELECT b.id AS branch_id, b.name AS branch_name,
+                   p.id AS product_id, p.name AS product_name, p.stock AS product_stock
+            FROM branch b
+            LEFT JOIN LATERAL (
+                SELECT id, name, stock FROM product
+                WHERE branch_id = b.id
+                ORDER BY stock DESC, lower(name), id
+                LIMIT 1
+            ) p ON true
+            WHERE b.franchise_id = :franchiseId
+            ORDER BY lower(b.name), b.id
+            """;
+
 
     private static final String FOREIGN_KEY_VIOLATION = "23503";
 
@@ -58,6 +82,31 @@ public class ProductAdapter implements SaveProductGateway, DeleteProductGateway,
                 .filter(updatedRows -> updatedRows > 0)
                 .flatMap(updatedRows -> template.selectOne(scope, ProductData.class))
                 .map(this::toEntity);
+    }
+
+    @Override
+    public Flux<BranchTopProduct> findByFranchise(UUID franchiseId) {
+        return template.getDatabaseClient()
+                .sql(TOP_STOCK_PRODUCTS)
+                .bind("franchiseId", franchiseId)
+                .map((row, metadata) -> toBranchTopProduct(row))
+                .all();
+    }
+
+    private BranchTopProduct toBranchTopProduct(Readable row) {
+        UUID branchId = row.get("branch_id", UUID.class);
+        Optional<Product> topProduct = Optional.ofNullable(row.get("product_id", UUID.class))
+                .map(productId -> Product.builder()
+                        .id(productId)
+                        .branchId(branchId)
+                        .name(row.get("product_name", String.class))
+                        .stock(row.get("product_stock", Integer.class))
+                        .build());
+        return BranchTopProduct.builder()
+                .branchId(branchId)
+                .branchName(row.get("branch_name", String.class))
+                .product(topProduct)
+                .build();
     }
 
     // Spring reports every integrity violation with the same class; the SQLSTATE tells a missing branch apart.

@@ -9,6 +9,7 @@ import com.pragma.franquicias.model.franchise.Franchise;
 import com.pragma.franquicias.model.franchise.exceptions.DuplicateFranchiseNameException;
 import com.pragma.franquicias.model.franchise.exceptions.InvalidFranchiseNameException;
 import com.pragma.franquicias.usecase.createfranchise.CreateFranchiseUseCase;
+import com.pragma.franquicias.usecase.gettopstockproducts.GetTopStockProductsUseCase;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,10 @@ class CreateFranchiseRouteTest {
 
     @MockitoBean
     private CreateFranchiseUseCase createFranchiseUseCase;
+
+    // The handler also needs the query use case to be built.
+    @MockitoBean
+    private GetTopStockProductsUseCase getTopStockProductsUseCase;
 
     private WebTestClient.RequestHeadersSpec<?> postJson(String body) {
         return webTestClient.post().uri(PATH).contentType(MediaType.APPLICATION_JSON).bodyValue(body);

@@ -1,5 +1,6 @@
 package com.pragma.franquicias.api.franchise;
 
+import static org.springframework.web.reactive.function.server.RequestPredicates.GET;
 import static org.springframework.web.reactive.function.server.RequestPredicates.POST;
 import static org.springframework.web.reactive.function.server.RouterFunctions.route;
 
@@ -13,6 +14,7 @@ public class FranchiseRouter {
 
     @Bean
     public RouterFunction<ServerResponse> franchiseRoutes(FranchiseHandler handler) {
-        return route(POST("/api/v1/franchises"), handler::create);
+        return route(POST("/api/v1/franchises"), handler::create)
+                .andRoute(GET("/api/v1/franchises/{franchiseId}/top-stock-products"), handler::topStockProducts);
     }
 }
