@@ -89,6 +89,11 @@ resource "aws_ecs_task_definition" "this" {
 
     portMappings = [{ containerPort = var.container_port, protocol = "tcp" }]
 
+    # The only plain environment value is the Spring profile, which is not sensitive.
+    environment = [
+      { name = "SPRING_PROFILES_ACTIVE", value = var.spring_profile },
+    ]
+
     # every DB_* value is injected by ECS from Secrets Manager (JSON keys of two secrets: the RDS-managed
     # credentials and the connection settings); none is in this file, in the image or in the plain environment.
     secrets = [

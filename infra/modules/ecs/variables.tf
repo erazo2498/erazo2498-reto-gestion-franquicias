@@ -85,6 +85,11 @@ variable "log_retention_days" {
   default     = 14
 }
 
+variable "spring_profile" {
+  description = "Spring profile the application runs with (it decides, for instance, whether Swagger is served)"
+  type        = string
+}
+
 variable "enable_execute_command" {
   description = "Enable ECS Exec (shell / port-forward into a task). Only for environments where a person needs to inspect the database"
   type        = bool

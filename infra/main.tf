@@ -60,5 +60,6 @@ module "ecs" {
   max_capacity             = var.max_tasks
   db_connection_secret_arn = module.database.connection_secret_arn
   db_secret_arn            = module.database.master_secret_arn
+  spring_profile           = var.environment
   enable_execute_command   = var.enable_execute_command
 }
