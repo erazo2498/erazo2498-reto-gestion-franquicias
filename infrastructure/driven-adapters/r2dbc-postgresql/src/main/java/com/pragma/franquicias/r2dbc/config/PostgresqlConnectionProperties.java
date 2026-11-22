@@ -11,6 +11,7 @@ public record PostgresqlConnectionProperties(
         @DefaultValue("public") String schema,
         String username,
         String password,
+        @DefaultValue("false") boolean ssl,
         @DefaultValue("2") int poolInitialSize,
         @DefaultValue("5") int poolMaxSize) {
 }
