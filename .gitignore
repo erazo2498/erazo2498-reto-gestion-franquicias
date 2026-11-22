@@ -341,3 +341,7 @@ build-cache
 *.tfstate.*
 .terraform/
 *.auto.tfvars
+
+### Asistente de IA (archivos personales, no se versionan) ###
+CLAUDE.local.md
+.claude/settings.local.json
