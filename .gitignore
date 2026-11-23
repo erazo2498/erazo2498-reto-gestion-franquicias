@@ -341,6 +341,10 @@ build-cache
 *.tfstate.*
 .terraform/
 *.auto.tfvars
+# A tfvars file named like this is loaded by Terraform on its own and is where a secret would end up by habit; the
+# per-environment values in infra/envs/*.tfvars are committed on purpose and hold no secrets.
+terraform.tfvars
+terraform.tfvars.json
 
 ### Asistente de IA (archivos personales, no se versionan) ###
 CLAUDE.local.md
