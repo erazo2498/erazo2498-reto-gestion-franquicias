@@ -170,6 +170,21 @@ data "aws_iam_policy_document" "deploy" {
     resources = ["arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:${var.project}/${each.key}/*"]
   }
 
+  # With manage_master_user_password, RDS creates the master secret ("rds!db-...") on behalf of the caller.
+  statement {
+    sid = "SecretsManagedByRds"
+    actions = [
+      "secretsmanager:CreateSecret",
+      "secretsmanager:TagResource",
+      "secretsmanager:DeleteSecret",
+      "secretsmanager:RotateSecret",
+      "secretsmanager:CancelRotateSecret",
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:UpdateSecret",
+    ]
+    resources = ["arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:rds!*"]
+  }
+
   statement {
     sid       = "SecretsDescribeAndRdsManaged"
     actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetResourcePolicy", "secretsmanager:ListSecrets"]
@@ -182,6 +197,7 @@ data "aws_iam_policy_document" "deploy" {
       "iam:CreateRole",
       "iam:DeleteRole",
       "iam:GetRole",
+      "iam:ListRoleTags",
       "iam:UpdateAssumeRolePolicy",
       "iam:TagRole",
       "iam:UntagRole",
@@ -213,6 +229,26 @@ data "aws_iam_policy_document" "deploy" {
     sid       = "ServiceLinkedRoles"
     actions   = ["iam:CreateServiceLinkedRole"]
     resources = ["arn:aws:iam::${local.account_id}:role/aws-service-role/*"]
+  }
+
+  # RDS encrypts the disk and the master-password secret with the AWS managed keys. The caller needs to look the keys
+  # up and to let those two services use them; the ViaService condition limits the rest to calls made through them.
+  statement {
+    sid       = "KmsLookupForManagedKeys"
+    actions   = ["kms:DescribeKey", "kms:ListAliases"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "KmsUseThroughRdsAndSecretsManager"
+    actions   = ["kms:CreateGrant", "kms:Decrypt", "kms:GenerateDataKey*", "kms:ReEncrypt*"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["rds.${var.region}.amazonaws.com", "secretsmanager.${var.region}.amazonaws.com"]
+    }
   }
 }
 

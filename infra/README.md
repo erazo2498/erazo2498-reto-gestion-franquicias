@@ -99,7 +99,8 @@ El `plan` de un ambiente nuevo muestra 32 recursos por crear. Al terminar, `terr
 |---|---|---|
 | Pull request que toca `infra/`, `deployment/` o `.github/` | `infra-checks.yml` | `terraform fmt`, `validate` y construye el `Dockerfile`. No usa AWS. |
 | Merge a `develop` | `deploy.yml` | Construye la imagen y despliega `dev`. |
-| Merge a `main` | `deploy.yml` | Despliega `staging` y, cuando un revisor aprueba, `prod`. |
+| Merge a `main` | — | No despliega nada: entregar el código no crea ni cambia ambientes. |
+| Ejecución manual (*Actions → Deploy → Run workflow*, eligiendo `staging` o `prod`) | `deploy.yml` | Construye la imagen y despliega ese ambiente. `prod` espera la aprobación de un revisor. |
 
 Cada despliegue asume el rol de su ambiente por OIDC (sin claves guardadas), sube la imagen con la etiqueta del commit, aplica Terraform y
 termina comprobando que `/actuator/health` responda 200. Una **misma imagen** se construye una vez por commit y viaja a todos los ambientes.

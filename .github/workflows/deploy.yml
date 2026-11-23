@@ -1,10 +1,20 @@
 name: Deploy
 
-# develop -> dev. main -> staging and then prod (prod waits for the reviewer set in its GitHub Environment).
-# The image is built once per commit and the same image goes to every environment.
+# develop -> dev, automatically. staging and prod are deployed by hand (Actions -> Deploy -> Run workflow), so merging
+# to main (which delivers the code) never creates or changes those environments by surprise. prod still waits for the
+# reviewer set in its GitHub Environment. The image is built once per run and the same image goes to the environment.
 on:
   push:
-    branches: [develop, main]
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
 
 permissions:
   id-token: write
@@ -28,25 +38,17 @@ jobs:
           retention-days: 1
 
   dev:
-    if: github.ref == 'refs/heads/develop'
+    if: github.event_name == 'push'
     needs: image
     uses: ./.github/workflows/deploy-environment.yml
     with:
       environment: dev
       image_tag: ${{ needs.image.outputs.tag }}
 
-  staging:
-    if: github.ref == 'refs/heads/main'
+  manual:
+    if: github.event_name == 'workflow_dispatch'
     needs: image
     uses: ./.github/workflows/deploy-environment.yml
     with:
-      environment: staging
-      image_tag: ${{ needs.image.outputs.tag }}
-
-  prod:
-    if: github.ref == 'refs/heads/main'
-    needs: [image, staging]
-    uses: ./.github/workflows/deploy-environment.yml
-    with:
-      environment: prod
+      environment: ${{ inputs.environment }}
       image_tag: ${{ needs.image.outputs.tag }}
