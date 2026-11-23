@@ -359,7 +359,24 @@ Terraform en tres ambientes: `dev`, `staging` y `prod`. Imagen:
 docker build -f deployment/Dockerfile -t reto-gestion-franquicias .
 ```
 
+**API desplegada (ambiente `dev`):**
+
+| | URL |
+|---|---|
+| API | <http://reto-franquicias-dev-1010070056.us-east-2.elb.amazonaws.com> |
+| **Swagger UI** | <http://reto-franquicias-dev-1010070056.us-east-2.elb.amazonaws.com/swagger-ui.html> |
+| Documento OpenAPI | <http://reto-franquicias-dev-1010070056.us-east-2.elb.amazonaws.com/v3/api-docs> |
+| Health | <http://reto-franquicias-dev-1010070056.us-east-2.elb.amazonaws.com/actuator/health> |
+
+Para probarla con Postman, importa `postman/franquicias.postman_collection.json` y el entorno `postman/aws.postman_environment.json`, que ya apunta a esta URL.
+La dirección existe mientras `dev` esté desplegado; el ALB atiende solo HTTP (ver *Límites conocidos* en `infra/README.md`).
+
+> **Esta API es pública y no tiene autenticación** (el reto no la pide): cualquiera con la dirección puede crear, modificar o borrar datos. Es un ambiente de pruebas,
+> así que **no guardes datos reales**. El tráfico va sin cifrar (HTTP) entre el cliente y el balanceador; la conexión a la base de datos sí va cifrada.
+> En producción faltarían autenticación, HTTPS con un certificado de ACM y un límite de peticiones (por ejemplo, con AWS WAF).
+
 Cómo desplegar a mano o con GitHub Actions, cómo usar la API en la nube, costos y cómo apagarlo: [`infra/README.md`](infra/README.md).
+`develop` despliega `dev` automáticamente; `staging` y `prod` se despliegan a mano desde *Actions → Deploy*.
 
 ## Flujo de trabajo
 
